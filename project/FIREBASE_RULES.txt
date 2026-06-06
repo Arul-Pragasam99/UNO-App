@@ -1,0 +1,57 @@
+// Firestore Rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow users to read/write their own player data
+    match /players/{uid} {
+      allow read: if request.auth.uid == uid;
+      allow create: if request.auth.uid == uid && request.resource.data.uid == uid;
+      allow update: if request.auth.uid == uid;
+    }
+
+    // Player stats
+    match /playerStats/{uid} {
+      allow read: if request.auth.uid == uid;
+      allow create: if request.auth.uid == uid;
+      allow update: if request.auth.uid == uid;
+    }
+
+    // Game rooms - anyone can read, but only creator can write
+    match /gameRooms/{roomId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth.uid == resource.data.createdBy || request.auth.uid == resource.data.player2?.uid;
+      allow delete: if request.auth.uid == resource.data.createdBy;
+    }
+
+    // Game states
+    match /gameStates/{gameId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Leaderboard
+    match /leaderboard/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}
+
+// Realtime Database Rules
+{
+  "rules": {
+    "gameRooms": {
+      "$roomId": {
+        ".read": "auth != null",
+        ".write": "root.child('gameRooms').child($roomId).child('createdBy').val() === auth.uid || root.child('gameRooms').child($roomId).child('player2').child('uid').val() === auth.uid"
+      }
+    },
+    "gameStates": {
+      "$gameId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    }
+  }
+}
