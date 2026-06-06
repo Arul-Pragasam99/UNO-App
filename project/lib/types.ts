@@ -41,6 +41,7 @@ export interface GameRoom {
   createdAt: Date;
   gameCode: string;
   maxPlayers: number;
+  expiresAt?: Date; // Added for room code expiry
 }
 
 export interface GameState {

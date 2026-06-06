@@ -6,7 +6,7 @@ import gsap from 'gsap';
 import { useAuth } from '@/lib/authContext';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, setDoc, addDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { generateGameCode } from '@/lib/gameLogic';
 import { GameRoom, Player } from '@/lib/types';
 
@@ -19,6 +19,9 @@ export default function DashboardPage() {
   const [gameCode, setGameCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [isCreatingGame, setIsCreatingGame] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [currentRoomId, setCurrentRoomId] = useState<string>('');
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -58,13 +61,56 @@ export default function DashboardPage() {
     }
   }, [loading]);
 
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+    };
+  }, []);
+
+  const startCountdown = (roomId: string, code: string) => {
+    setTimeLeft(60);
+    setCurrentRoomId(roomId);
+    
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+    }
+    
+    countdownIntervalRef.current = setInterval(async () => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          // Time's up - delete the room
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+          }
+          
+          // Delete the game room from Firestore
+          const roomRef = doc(db, 'gameRooms', roomId);
+          deleteDoc(roomRef).catch(console.error);
+          
+          // Close modal if still open
+          setShowModal(false);
+          alert(`Game code ${code} has expired after 1 minute. Please create a new game.`);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   const createOneVsOneGame = async () => {
     if (!user || !playerData) return;
     setIsCreatingGame(true);
     try {
       const code = generateGameCode();
+      const expiryTime = new Date();
+      expiryTime.setMinutes(expiryTime.getMinutes() + 1); // Expires in 1 minute
+      
+      const roomId = user.uid + '_' + Date.now();
       const room: GameRoom = {
-        roomId: user.uid + '_' + Date.now(),
+        roomId: roomId,
         createdBy: user.uid,
         player1: playerData,
         gameType: 'oneVsOne',
@@ -72,11 +118,13 @@ export default function DashboardPage() {
         createdAt: new Date(),
         gameCode: code,
         maxPlayers: 10,
+        expiresAt: expiryTime,
       };
 
       await setDoc(doc(db, 'gameRooms', room.roomId), room);
       setGameCode(code);
       setShowModal(true);
+      startCountdown(roomId, code);
     } catch (error) {
       console.error('Error creating game:', error);
     } finally {
@@ -89,8 +137,12 @@ export default function DashboardPage() {
     setIsCreatingGame(true);
     try {
       const code = generateGameCode();
+      const expiryTime = new Date();
+      expiryTime.setMinutes(expiryTime.getMinutes() + 1);
+      
+      const roomId = user.uid + '_room_' + Date.now();
       const room: GameRoom = {
-        roomId: user.uid + '_room_' + Date.now(),
+        roomId: roomId,
         createdBy: user.uid,
         player1: playerData,
         gameType: 'room',
@@ -98,11 +150,13 @@ export default function DashboardPage() {
         createdAt: new Date(),
         gameCode: code,
         maxPlayers: 10,
+        expiresAt: expiryTime,
       };
 
       await setDoc(doc(db, 'gameRooms', room.roomId), room);
       setGameCode(code);
       setShowModal(true);
+      startCountdown(roomId, code);
     } catch (error) {
       console.error('Error creating room:', error);
     } finally {
@@ -117,12 +171,20 @@ export default function DashboardPage() {
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
-        alert('Game code not found');
+        alert('Game code not found or expired');
         return;
       }
 
       const roomDoc = querySnapshot.docs[0];
       const roomData = roomDoc.data() as GameRoom;
+
+      // Check if room has expired
+      if (roomData.expiresAt && new Date(roomData.expiresAt) < new Date()) {
+        alert('Game code has expired. Please ask the host to create a new game.');
+        // Delete expired room
+        await deleteDoc(doc(db, 'gameRooms', roomDoc.id));
+        return;
+      }
 
       // Count current players dynamically
       const currentPlayers = [];
@@ -165,6 +227,12 @@ export default function DashboardPage() {
       }
 
       await setDoc(doc(db, 'gameRooms', roomDoc.id), updateData, { merge: true });
+      
+      // Clear countdown if it exists
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+      
       router.push(`/game/${roomDoc.id}`);
       
     } catch (error) {
@@ -178,6 +246,13 @@ export default function DashboardPage() {
     alert('Game code copied to clipboard!');
   };
 
+  const closeModal = () => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+    }
+    setShowModal(false);
+  };
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-800">
@@ -187,6 +262,12 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div
@@ -299,7 +380,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal with Countdown Timer */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl">
@@ -312,6 +393,17 @@ export default function DashboardPage() {
               </p>
             </div>
 
+            {/* Countdown Timer */}
+            <div className="text-center mb-6">
+              <p className="text-sm text-gray-600 mb-1">Code expires in:</p>
+              <p className={`text-3xl font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-orange-500'}`}>
+                {formatTime(timeLeft)}
+              </p>
+              {timeLeft <= 10 && (
+                <p className="text-xs text-red-500 mt-1">⚠️ Expiring soon!</p>
+              )}
+            </div>
+
             <button
               onClick={() => copyGameCode(gameCode)}
               className="w-full mb-4 px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl transition-colors"
@@ -320,7 +412,7 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={() => setShowModal(false)}
+              onClick={closeModal}
               className="w-full px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition-colors"
             >
               Done
