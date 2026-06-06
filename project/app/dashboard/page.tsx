@@ -71,7 +71,7 @@ export default function DashboardPage() {
         status: 'waiting',
         createdAt: new Date(),
         gameCode: code,
-        maxPlayers: 2,
+        maxPlayers: 10,
       };
 
       await setDoc(doc(db, 'gameRooms', room.roomId), room);
@@ -97,7 +97,7 @@ export default function DashboardPage() {
         status: 'waiting',
         createdAt: new Date(),
         gameCode: code,
-        maxPlayers: 4,
+        maxPlayers: 10,
       };
 
       await setDoc(doc(db, 'gameRooms', room.roomId), room);
@@ -124,24 +124,49 @@ export default function DashboardPage() {
       const roomDoc = querySnapshot.docs[0];
       const roomData = roomDoc.data() as GameRoom;
 
+      // Count current players dynamically
+      const currentPlayers = [];
+      for (let i = 1; i <= 10; i++) {
+        const playerKey = `player${i}`;
+        const playerValue = roomData[playerKey as keyof GameRoom];
+        if (playerValue) {
+          currentPlayers.push(playerValue);
+        }
+      }
+      
       // Check if room is full
-      if (roomData.maxPlayers === 2 && roomData.player2) {
+      if (currentPlayers.length >= roomData.maxPlayers) {
+        alert(`Game is full (max ${roomData.maxPlayers} players)`);
+        return;
+      }
+
+      // Find the next available player slot (starting from player2)
+      let playerSlot: string | null = null;
+      for (let i = 2; i <= 10; i++) {
+        const playerKey = `player${i}`;
+        if (!roomData[playerKey as keyof GameRoom]) {
+          playerSlot = playerKey;
+          break;
+        }
+      }
+
+      if (!playerSlot) {
         alert('Game is full');
         return;
       }
 
-      // Update room with second player
-      if (roomData.gameType === 'oneVsOne') {
-        await setDoc(
-          doc(db, 'gameRooms', roomDoc.id),
-          { player2: playerData, status: 'playing' },
-          { merge: true }
-        );
-        router.push(`/game/${roomDoc.id}`);
-      } else {
-        // For room games, just join and redirect
-        router.push(`/game/${roomDoc.id}`);
+      // Update room with the new player
+      const updateData: any = {};
+      updateData[playerSlot] = playerData;
+      
+      // Change status to playing if we have at least 2 players
+      if (currentPlayers.length + 1 >= 2) {
+        updateData.status = 'playing';
       }
+
+      await setDoc(doc(db, 'gameRooms', roomDoc.id), updateData, { merge: true });
+      router.push(`/game/${roomDoc.id}`);
+      
     } catch (error) {
       console.error('Error joining game:', error);
       alert('Failed to join game');
@@ -243,7 +268,7 @@ export default function DashboardPage() {
           >
             <div className="text-5xl mb-4">👥</div>
             <h2 className="text-3xl font-display font-bold text-white mb-2">Room Game</h2>
-            <p className="text-white/90 mb-4">Create a room and invite up to 4 friends</p>
+            <p className="text-white/90 mb-4">Create a room and invite up to 10 friends</p>
             <button
               disabled={isCreatingGame}
               className="w-full bg-white text-blue-600 font-bold py-3 rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
@@ -279,7 +304,7 @@ export default function DashboardPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl">
             <h2 className="text-2xl font-display font-bold text-gray-800 mb-4">Game Created!</h2>
-            <p className="text-gray-600 mb-6">Share this code with your friend:</p>
+            <p className="text-gray-600 mb-6">Share this code with your friends:</p>
 
             <div className="bg-gradient-to-r from-yellow-300 to-red-300 rounded-2xl p-6 mb-6 text-center">
               <p className="text-4xl font-display font-bold text-gray-800 tracking-widest">
