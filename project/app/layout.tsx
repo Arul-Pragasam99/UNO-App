@@ -1,11 +1,18 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '@/lib/authContext';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'UNO - Play with Friends',
   description: 'Play UNO card game with friends online. Create rooms or play 1v1 matches.',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
+  // Remove viewport from here
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: true, // Better for accessibility, or set to false if needed
 };
 
 export default function RootLayout({
