@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import gsap from 'gsap';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { GameRoom, Card, GameState } from '@/lib/types';
 import { generateUnoDeck, canPlayCard, drawCards } from '@/lib/gameLogic';
 import GameCard from '@/components/GameCard';
@@ -77,7 +77,8 @@ export default function GamePage() {
           status: 'playing',
         };
 
-        await updateDoc(gameStateRef, newGameState);
+        // FIXED: Use setDoc instead of updateDoc for new document
+        await setDoc(gameStateRef, newGameState);
         setGameState(newGameState);
         setGameLoading(false);
       } else {
@@ -86,6 +87,7 @@ export default function GamePage() {
       }
     } catch (error) {
       console.error('Error initializing game:', error);
+      setGameLoading(false);
     }
   };
 
@@ -180,8 +182,7 @@ export default function GamePage() {
     );
   }
 
-  const isCurrentPlayer =
-    user?.uid === gameState.currentTurn;
+  const isCurrentPlayer = user?.uid === gameState.currentTurn;
   const isPlayer1 = user?.uid === gameState.player1Id;
   const playerHand = isPlayer1 ? gameState.player1Hand : gameState.player2Hand;
   const opponentHand = isPlayer1 ? gameState.player2Hand : gameState.player1Hand;
@@ -275,4 +276,4 @@ export default function GamePage() {
       </div>
     </div>
   );
-}
+} 

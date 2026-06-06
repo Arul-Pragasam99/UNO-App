@@ -5,14 +5,13 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'UNO - Play with Friends',
   description: 'Play UNO card game with friends online. Create rooms or play 1v1 matches.',
-  // Remove viewport from here
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  userScalable: true, // Better for accessibility, or set to false if needed
+  userScalable: true,
 };
 
 export default function RootLayout({
@@ -21,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#667eea" />
       </head>

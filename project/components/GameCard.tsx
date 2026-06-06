@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Card } from '@/lib/types';
 
 interface GameCardProps {
@@ -11,13 +10,13 @@ interface GameCardProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
-const GameCard: React.FC<GameCardProps> = ({
+const GameCard = ({
   card,
   onClick,
   isSelectable = false,
   isSelected = false,
   size = 'md',
-}) => {
+}: GameCardProps) => {
   const getCardColor = () => {
     switch (card.color) {
       case 'red':

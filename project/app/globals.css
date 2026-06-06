@@ -10,9 +10,13 @@
   box-sizing: border-box;
 }
 
-html {
+/* Remove or comment this line to fix the warning */
+/* html {
   scroll-behavior: smooth;
-}
+} */
+
+/* OR keep it but add the attribute to layout.tsx (we already did) */
+/* The warning is fixed by adding data-scroll-behavior="smooth" to <html> in layout.tsx */
 
 body {
   font-family: 'Inter', sans-serif;

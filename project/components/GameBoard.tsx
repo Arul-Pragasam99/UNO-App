@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Card } from '@/lib/types';
 import GameCard from './GameCard';
 
@@ -9,7 +8,7 @@ interface GameBoardProps {
   drawPileSize: number;
 }
 
-const GameBoard: React.FC<GameBoardProps> = ({ topCard, drawPileSize }) => {
+const GameBoard = ({ topCard, drawPileSize }: GameBoardProps) => {
   return (
     <div className="w-full max-w-2xl mx-auto">
       <div className="grid grid-cols-2 gap-8 md:gap-12 mb-4">

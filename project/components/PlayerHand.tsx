@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import gsap from 'gsap';
 import { Card } from '@/lib/types';
 import GameCard from './GameCard';
@@ -12,14 +12,14 @@ interface PlayerHandProps {
   topCard: Card;
 }
 
-const PlayerHand: React.FC<PlayerHandProps> = ({
+const PlayerHand = ({
   cards,
   onCardClick,
   isMyTurn,
   topCard,
-}) => {
+}: PlayerHandProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedCard, setSelectedCard] = React.useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
 
   useEffect(() => {
     if (containerRef.current) {
