@@ -239,6 +239,14 @@ export default function GamePage() {
           <div className="absolute bottom-20 left-1/2 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-blob animation-delay-4000"></div>
         </div>
 
+        {/* Cancel Button */}
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="absolute top-4 left-4 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg backdrop-blur transition-colors text-sm font-medium"
+        >
+          ← Back to Dashboard
+        </button>
+
         <div className="relative z-10 text-center max-w-md">
           {/* UNO Card Loading Animation */}
           <div className="mb-8 flex justify-center">
@@ -291,17 +299,37 @@ export default function GamePage() {
             </div>
           </div>
 
+          {/* Game Code Display */}
+          {room && (
+            <div className="bg-white/10 backdrop-blur rounded-xl p-4 border border-white/20 mb-6">
+              <p className="text-white/70 text-sm mb-2">Game Code</p>
+              <p className="text-white font-mono font-bold text-2xl tracking-widest mb-3">
+                {room.gameCode}
+              </p>
+              <p className="text-white/60 text-xs">Share this code with your friend!</p>
+            </div>
+          )}
+
           {/* Room Info */}
-          <div className="bg-white/10 backdrop-blur rounded-xl p-4 border border-white/20 mb-6">
-            <p className="text-white/70 text-sm mb-1">Game Room</p>
-            <p className="text-white font-mono font-bold text-lg">{roomId?.slice(0, 12)}...</p>
+          <div className="bg-white/10 backdrop-blur rounded-xl p-3 border border-white/20 mb-6">
+            <p className="text-white/70 text-xs mb-1">Room ID</p>
+            <p className="text-white/80 font-mono text-sm">{roomId?.slice(0, 16)}...</p>
           </div>
 
           {/* Status Messages */}
           <p className="text-white/80 text-base font-medium mb-2">
             {error ? '⚠️ ' : '✓ '}
-            {error || 'Preparing game...'}
+            <span className="inline-block">
+              {error || 'Preparing game...'}
+            </span>
           </p>
+
+          {/* Players Count */}
+          {room && (
+            <p className="text-white/60 text-xs mt-2">
+              Players: {room.playerOrder.length} / {room.maxPlayers}
+            </p>
+          )}
 
           {/* Tip */}
           {!error && (
@@ -312,12 +340,20 @@ export default function GamePage() {
 
           {/* Error Retry Button */}
           {error && (
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-4 px-6 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors backdrop-blur"
-            >
-              Retry
-            </button>
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => window.location.reload()}
+                className="flex-1 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors backdrop-blur font-medium"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="flex-1 px-4 py-2 bg-red-500/30 hover:bg-red-500/40 text-white rounded-lg transition-colors backdrop-blur font-medium"
+              >
+                Cancel
+              </button>
+            </div>
           )}
         </div>
 
