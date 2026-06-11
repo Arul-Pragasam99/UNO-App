@@ -61,7 +61,6 @@ export default function DashboardPage() {
     }
   }, [loading]);
 
-  // Cleanup interval on unmount
   useEffect(() => {
     return () => {
       if (countdownIntervalRef.current) {
@@ -73,24 +72,19 @@ export default function DashboardPage() {
   const startCountdown = (roomId: string, code: string) => {
     setTimeLeft(60);
     setCurrentRoomId(roomId);
-    
+
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
     }
-    
+
     countdownIntervalRef.current = setInterval(async () => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          // Time's up - delete the room
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
-          
-          // Delete the game room from Firestore
           const roomRef = doc(db, 'gameRooms', roomId);
           deleteDoc(roomRef).catch(console.error);
-          
-          // Close modal if still open
           setShowModal(false);
           alert(`Game code ${code} has expired after 1 minute. Please create a new game.`);
           return 0;
@@ -106,18 +100,19 @@ export default function DashboardPage() {
     try {
       const code = generateGameCode();
       const expiryTime = new Date();
-      expiryTime.setMinutes(expiryTime.getMinutes() + 1); // Expires in 1 minute
-      
+      expiryTime.setMinutes(expiryTime.getMinutes() + 1);
+
       const roomId = user.uid + '_' + Date.now();
       const room: GameRoom = {
-        roomId: roomId,
+        roomId,
         createdBy: user.uid,
-        player1: playerData,
+        players: { [user.uid]: playerData },   // ✅ fixed
+        playerOrder: [user.uid],               // ✅ fixed
         gameType: 'oneVsOne',
         status: 'waiting',
         createdAt: new Date(),
         gameCode: code,
-        maxPlayers: 10,
+        maxPlayers: 2,
         expiresAt: expiryTime,
       };
 
@@ -139,12 +134,13 @@ export default function DashboardPage() {
       const code = generateGameCode();
       const expiryTime = new Date();
       expiryTime.setMinutes(expiryTime.getMinutes() + 1);
-      
+
       const roomId = user.uid + '_room_' + Date.now();
       const room: GameRoom = {
-        roomId: roomId,
+        roomId,
         createdBy: user.uid,
-        player1: playerData,
+        players: { [user.uid]: playerData },   // ✅ fixed
+        playerOrder: [user.uid],               // ✅ fixed
         gameType: 'room',
         status: 'waiting',
         createdAt: new Date(),
@@ -178,63 +174,47 @@ export default function DashboardPage() {
       const roomDoc = querySnapshot.docs[0];
       const roomData = roomDoc.data() as GameRoom;
 
-      // Check if room has expired
+      // Check expiry
       if (roomData.expiresAt && new Date(roomData.expiresAt) < new Date()) {
         alert('Game code has expired. Please ask the host to create a new game.');
-        // Delete expired room
         await deleteDoc(doc(db, 'gameRooms', roomDoc.id));
         return;
       }
 
-      // Count current players dynamically
-      const currentPlayers = [];
-      for (let i = 1; i <= 10; i++) {
-        const playerKey = `player${i}`;
-        const playerValue = roomData[playerKey as keyof GameRoom];
-        if (playerValue) {
-          currentPlayers.push(playerValue);
-        }
+      const currentPlayerCount = Object.keys(roomData.players || {}).length;
+
+      // Check if already in room
+      if (roomData.players?.[user.uid]) {
+        router.push(`/game/${roomDoc.id}`);
+        return;
       }
-      
-      // Check if room is full
-      if (currentPlayers.length >= roomData.maxPlayers) {
+
+      // Check if full
+      if (currentPlayerCount >= roomData.maxPlayers) {
         alert(`Game is full (max ${roomData.maxPlayers} players)`);
         return;
       }
 
-      // Find the next available player slot (starting from player2)
-      let playerSlot: string | null = null;
-      for (let i = 2; i <= 10; i++) {
-        const playerKey = `player${i}`;
-        if (!roomData[playerKey as keyof GameRoom]) {
-          playerSlot = playerKey;
-          break;
-        }
-      }
+      // Add player to the players map and playerOrder
+      const updatedPlayers = { ...roomData.players, [user.uid]: playerData };
+      const updatedPlayerOrder = [...(roomData.playerOrder || []), user.uid];
+      const updatedStatus = updatedPlayerOrder.length >= 2 ? 'playing' : 'waiting';
 
-      if (!playerSlot) {
-        alert('Game is full');
-        return;
-      }
+      await setDoc(
+        doc(db, 'gameRooms', roomDoc.id),
+        {
+          players: updatedPlayers,
+          playerOrder: updatedPlayerOrder,
+          status: updatedStatus,
+        },
+        { merge: true }
+      );
 
-      // Update room with the new player
-      const updateData: any = {};
-      updateData[playerSlot] = playerData;
-      
-      // Change status to playing if we have at least 2 players
-      if (currentPlayers.length + 1 >= 2) {
-        updateData.status = 'playing';
-      }
-
-      await setDoc(doc(db, 'gameRooms', roomDoc.id), updateData, { merge: true });
-      
-      // Clear countdown if it exists
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
       }
-      
+
       router.push(`/game/${roomDoc.id}`);
-      
     } catch (error) {
       console.error('Error joining game:', error);
       alert('Failed to join game');
@@ -308,7 +288,7 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Stats Section */}
+        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-white/10 backdrop-blur rounded-2xl p-6 border border-white/20">
             <p className="text-gray-200 text-sm mb-2">Total Games</p>
@@ -326,7 +306,6 @@ export default function DashboardPage() {
 
         {/* Game Mode Selection */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* One vs One */}
           <div
             className="group bg-gradient-to-br from-pink-500 to-red-600 rounded-3xl p-8 cursor-pointer hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
             onClick={createOneVsOneGame}
@@ -342,7 +321,6 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* Room */}
           <div
             className="group bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl p-8 cursor-pointer hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
             onClick={createRoomGame}
@@ -359,7 +337,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Join Game Section */}
+        {/* Join Game */}
         <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20">
           <h3 className="text-2xl font-display font-bold text-white mb-4">Join a Game</h3>
           <div className="flex gap-2">
@@ -380,7 +358,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Modal with Countdown Timer */}
+      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl">
@@ -393,7 +371,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* Countdown Timer */}
             <div className="text-center mb-6">
               <p className="text-sm text-gray-600 mb-1">Code expires in:</p>
               <p className={`text-3xl font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-orange-500'}`}>
