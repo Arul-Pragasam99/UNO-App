@@ -8,8 +8,9 @@ import {
   User,
 } from 'firebase/auth';
 import { auth, db } from './firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { Player } from './types';
+import { initializePlayerStats } from './statsService';
 
 interface AuthContextType {
   user: User | null;
@@ -30,25 +31,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const unsubscribe = auth.onAuthStateChanged(async (authUser) => {
       if (authUser) {
         setUser(authUser);
-        
+
         // Check if player data exists in Firestore
         const playerRef = doc(db, 'players', authUser.uid);
         const playerSnap = await getDoc(playerRef);
 
+        const playerInfo: Player = {
+          uid: authUser.uid,
+          name: authUser.displayName || 'Unknown',
+          email: authUser.email || '',
+          photoURL: authUser.photoURL || undefined,
+          createdAt: playerSnap.exists() ? (playerSnap.data() as Player).createdAt : new Date(),
+        };
+
         if (playerSnap.exists()) {
-          setPlayerData(playerSnap.data() as Player);
+          // Update profile data on each login (name, photo may change)
+          await updateDoc(playerRef, {
+            name: playerInfo.name,
+            email: playerInfo.email,
+            photoURL: playerInfo.photoURL,
+          });
+          setPlayerData({ ...(playerSnap.data() as Player), ...playerInfo });
         } else {
           // Create new player document
-          const newPlayer: Player = {
-            uid: authUser.uid,
-            name: authUser.displayName || 'Unknown',
-            email: authUser.email || '',
-            photoURL: authUser.photoURL || undefined,
-            createdAt: new Date(),
-          };
-          await setDoc(playerRef, newPlayer);
-          setPlayerData(newPlayer);
+          await setDoc(playerRef, playerInfo);
+          setPlayerData(playerInfo);
         }
+
+        // Initialize / update player stats
+        await initializePlayerStats(
+          authUser.uid,
+          playerInfo.name,
+          playerInfo.email,
+          playerInfo.photoURL
+        );
       } else {
         setUser(null);
         setPlayerData(null);

@@ -3,6 +3,8 @@
 import { useRef, useEffect, useState } from 'react';
 import gsap from 'gsap';
 import { Card } from '@/lib/types';
+import { canPlayCard } from '@/lib/gameLogic';
+import { vibrateCardPlay, vibrateError } from '@/lib/haptics';
 import GameCard from './GameCard';
 
 interface PlayerHandProps {
@@ -10,6 +12,7 @@ interface PlayerHandProps {
   onCardClick: (card: Card) => void;
   isMyTurn: boolean;
   topCard: Card;
+  currentColor: string;
 }
 
 const PlayerHand = ({
@@ -17,6 +20,7 @@ const PlayerHand = ({
   onCardClick,
   isMyTurn,
   topCard,
+  currentColor,
 }: PlayerHandProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
@@ -26,66 +30,92 @@ const PlayerHand = ({
       const cardElements = containerRef.current.querySelectorAll('[data-card-id]');
       gsap.fromTo(
         cardElements,
-        { opacity: 0, y: 20 },
-        { opacity: 1, y: 0, stagger: 0.05, duration: 0.5, ease: 'power2.out' }
+        { opacity: 0, y: 30, scale: 0.8 },
+        {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          stagger: { each: 0.04, from: 'center' },
+          duration: 0.4,
+          ease: 'back.out(1.2)',
+        }
       );
     }
-  }, [cards]);
+  }, [cards.length]);
 
   const handleCardClick = (card: Card) => {
-    setSelectedCard(card.id);
-    onCardClick(card);
+    if (!isMyTurn) return;
+
+    const playable = canPlayCard(card, topCard, currentColor);
+
+    if (!playable) {
+      vibrateError();
+      return;
+    }
+
+    if (selectedCard === card.id) {
+      // Double-tap to play
+      vibrateCardPlay();
+      setSelectedCard(null);
+      onCardClick(card);
+    } else {
+      // First tap to select
+      setSelectedCard(card.id);
+    }
   };
 
-  const canPlayCard = (card: Card): boolean => {
-    if (card.color === 'wild') return true;
-    if (card.color === topCard.color) return true;
-    if (card.value === topCard.value) return true;
-    return false;
+  const isCardPlayable = (card: Card): boolean => {
+    return canPlayCard(card, topCard, currentColor);
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto">
-      <div className="text-center mb-4">
-        <p className="text-white/70 text-sm">
-          {isMyTurn ? '✨ Your Turn - Click a card to play' : 'Waiting for opponent...'}
+    <div className="w-full">
+      {/* Turn indicator */}
+      <div className="text-center mb-2 sm:mb-3">
+        <p className={`text-xs sm:text-sm font-semibold ${isMyTurn ? 'text-yellow-300' : 'text-white/50'}`}>
+          {isMyTurn ? '✨ Your Turn — Tap a card, then tap again to play' : '⏳ Waiting for opponent...'}
         </p>
       </div>
+
+      {/* Card hand — horizontally scrollable on mobile, centered on desktop */}
       <div
         ref={containerRef}
-        className="flex justify-center items-center gap-2 overflow-x-auto pb-4 px-4 flex-wrap"
+        className="
+          flex items-end gap-1 sm:gap-1.5 md:gap-2
+          overflow-x-auto overflow-y-visible
+          pb-2 px-2 sm:px-4
+          scroll-smooth snap-x snap-mandatory
+          justify-start sm:justify-center
+          -mx-2 sm:mx-0
+          scrollbar-hide
+        "
+        style={{ WebkitOverflowScrolling: 'touch' }}
       >
-        {cards.map((card, index) => (
-          <div
-            key={card.id}
-            data-card-id={card.id}
-            className={`
-              transition-all duration-300
-              ${!canPlayCard(card) && isMyTurn ? 'opacity-50' : ''}
-              ${selectedCard === card.id ? 'ring-4 ring-yellow-300' : ''}
-            `}
-          >
+        {cards.map((card) => {
+          const playable = isCardPlayable(card);
+          return (
             <div
-              onClick={() => handleCardClick(card)}
-              className={`
-                transition-all duration-300 transform
-                ${canPlayCard(card) && isMyTurn ? 'cursor-pointer hover:scale-110' : 'cursor-not-allowed'}
-              `}
+              key={card.id}
+              className="flex-shrink-0 snap-center"
             >
               <GameCard
                 card={card}
-                isSelectable={isMyTurn && canPlayCard(card)}
+                onClick={() => handleCardClick(card)}
+                isSelectable={isMyTurn}
                 isSelected={selectedCard === card.id}
-                size="md"
+                isPlayable={playable}
+                size={cards.length > 10 ? 'xs' : cards.length > 6 ? 'sm' : 'md'}
               />
-              {!canPlayCard(card) && isMyTurn && (
-                <p className="text-red-300 text-xs text-center mt-1 font-bold">
-                  Can't Play
-                </p>
-              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
+      </div>
+
+      {/* Card count badge */}
+      <div className="text-center mt-1">
+        <span className="inline-flex items-center gap-1 text-white/60 text-xs bg-white/10 rounded-full px-3 py-0.5">
+          🃏 {cards.length} card{cards.length !== 1 ? 's' : ''}
+        </span>
       </div>
     </div>
   );

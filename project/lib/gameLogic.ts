@@ -1,6 +1,8 @@
-import { Card } from './types';
+import { Card, CardColor, GameState } from './types';
 
-// Generate a standard Uno deck
+// ─── Deck Generation ───────────────────────────────────────────────────────────
+
+/** Generate a standard 108-card deck and shuffle it */
 export const generateUnoDeck = (): Card[] => {
   const deck: Card[] = [];
   const colors: ('red' | 'yellow' | 'blue' | 'green')[] = ['red', 'yellow', 'blue', 'green'];
@@ -9,6 +11,7 @@ export const generateUnoDeck = (): Card[] => {
   colors.forEach(color => {
     values.forEach((value, idx) => {
       if (idx === 0) {
+        // Only one zero per color
         deck.push({ id: `${color}-${value}-0`, color, value });
       } else {
         deck.push({ id: `${color}-${value}-0`, color, value });
@@ -17,7 +20,7 @@ export const generateUnoDeck = (): Card[] => {
     });
   });
 
-  // Add Wild cards
+  // 4 Wild and 4 Wild Draw Four
   for (let i = 0; i < 4; i++) {
     deck.push({ id: `wild-${i}`, color: 'wild', value: 'Wild' });
     deck.push({ id: `wild-drawfour-${i}`, color: 'wild', value: 'DrawFour' });
@@ -26,6 +29,7 @@ export const generateUnoDeck = (): Card[] => {
   return shuffleDeck(deck);
 };
 
+/** Fisher-Yates shuffle */
 export const shuffleDeck = (deck: Card[]): Card[] => {
   const shuffled = [...deck];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -35,16 +39,28 @@ export const shuffleDeck = (deck: Card[]): Card[] => {
   return shuffled;
 };
 
-export const canPlayCard = (card: Card, topCard: Card): boolean => {
+// ─── Card Playability ──────────────────────────────────────────────────────────
+
+/** Check if a card can be played on the current top card */
+export const canPlayCard = (card: Card, topCard: Card, currentColor: string): boolean => {
   if (card.color === 'wild') return true;
-  if (card.color === topCard.color) return true;
-  if (card.value === topCard.value) return true;
+  if (card.color === currentColor) return true;
+  if (card.value === topCard.value && topCard.color !== 'wild') return true;
   return false;
 };
 
+// ─── Game Code ─────────────────────────────────────────────────────────────────
+
 export const generateGameCode = (): string => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars (0/O, 1/I)
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
 };
+
+// ─── Card Drawing ──────────────────────────────────────────────────────────────
 
 export const drawCards = (
   drawPile: Card[],
@@ -55,6 +71,242 @@ export const drawCards = (
   return { newCards, remainingPile };
 };
 
-export const calculateWinnerPoints = (opponentHandSize: number): number => {
-  return opponentHandSize * 10;
+// ─── Multi-Player Turn Management ──────────────────────────────────────────────
+
+/** Get the next player index based on direction */
+export const getNextPlayerIndex = (
+  currentIndex: number,
+  direction: 1 | -1,
+  playerCount: number,
+  skip: number = 0
+): number => {
+  // skip=0 means next player, skip=1 means skip one player
+  const steps = 1 + skip;
+  let next = (currentIndex + direction * steps) % playerCount;
+  if (next < 0) next += playerCount;
+  return next;
+};
+
+/** Get the UID of the next player */
+export const getNextPlayerId = (state: GameState, skip: number = 0): string => {
+  const nextIndex = getNextPlayerIndex(
+    state.currentPlayerIndex,
+    state.direction,
+    state.playerOrder.length,
+    skip
+  );
+  return state.playerOrder[nextIndex];
+};
+
+/** Get the current player's UID */
+export const getCurrentPlayerId = (state: GameState): string => {
+  return state.playerOrder[state.currentPlayerIndex];
+};
+
+// ─── Initialize Game State ─────────────────────────────────────────────────────
+
+/** Create initial game state for N players */
+export const initializeGameState = (
+  roomId: string,
+  playerOrder: string[]
+): GameState => {
+  const deck = generateUnoDeck();
+  const cardsPerPlayer = 7;
+
+  const playerHands: Record<string, Card[]> = {};
+  let cardIndex = 0;
+
+  playerOrder.forEach(uid => {
+    playerHands[uid] = deck.slice(cardIndex, cardIndex + cardsPerPlayer);
+    cardIndex += cardsPerPlayer;
+  });
+
+  const remainingDeck = deck.slice(cardIndex);
+
+  // Find first non-wild card for discard pile
+  let discardIndex = 0;
+  while (discardIndex < remainingDeck.length && remainingDeck[discardIndex].color === 'wild') {
+    discardIndex++;
+  }
+  // If all remaining are wild (extremely unlikely), just use the first one
+  if (discardIndex >= remainingDeck.length) discardIndex = 0;
+
+  const discardCard = remainingDeck[discardIndex];
+  const drawPile = [
+    ...remainingDeck.slice(0, discardIndex),
+    ...remainingDeck.slice(discardIndex + 1)
+  ];
+
+  return {
+    roomId,
+    playerHands,
+    playerOrder,
+    currentPlayerIndex: 0,
+    direction: 1,
+    discardPile: [discardCard],
+    drawPile,
+    pendingDraw: 0,
+    currentColor: discardCard.color as 'red' | 'yellow' | 'blue' | 'green',
+    unoCalledBy: [],
+    status: 'playing',
+  };
+};
+
+// ─── Handle Special Cards ──────────────────────────────────────────────────────
+
+/** Apply the effect of a played card and return updated state */
+export const applyCardEffect = (
+  state: GameState,
+  card: Card,
+  playerId: string,
+  chosenColor?: 'red' | 'yellow' | 'blue' | 'green'
+): GameState => {
+  const newState = { ...state };
+  const playerCount = newState.playerOrder.length;
+
+  switch (card.value) {
+    case 'Skip': {
+      // Skip next player
+      newState.currentPlayerIndex = getNextPlayerIndex(
+        newState.currentPlayerIndex,
+        newState.direction,
+        playerCount,
+        1 // skip 1
+      );
+      newState.currentColor = card.color as 'red' | 'yellow' | 'blue' | 'green';
+      newState.lastAction = { type: 'skipPlayed', playerId, card, timestamp: Date.now() };
+      break;
+    }
+
+    case 'Reverse': {
+      if (playerCount === 2) {
+        // In 2-player, Reverse acts like Skip
+        newState.currentPlayerIndex = getNextPlayerIndex(
+          newState.currentPlayerIndex,
+          newState.direction,
+          playerCount,
+          1
+        );
+      } else {
+        newState.direction = (newState.direction * -1) as 1 | -1;
+        newState.currentPlayerIndex = getNextPlayerIndex(
+          newState.currentPlayerIndex,
+          newState.direction,
+          playerCount
+        );
+      }
+      newState.currentColor = card.color as 'red' | 'yellow' | 'blue' | 'green';
+      newState.lastAction = { type: 'reversePlayed', playerId, card, timestamp: Date.now() };
+      break;
+    }
+
+    case 'DrawTwo': {
+      const targetIndex = getNextPlayerIndex(
+        newState.currentPlayerIndex,
+        newState.direction,
+        playerCount
+      );
+      const targetId = newState.playerOrder[targetIndex];
+
+      // Draw 2 cards for the next player
+      const { newCards, remainingPile } = drawCards(newState.drawPile, 2);
+      newState.playerHands = { ...newState.playerHands };
+      newState.playerHands[targetId] = [...(newState.playerHands[targetId] || []), ...newCards];
+      newState.drawPile = remainingPile;
+
+      // Skip the target player
+      newState.currentPlayerIndex = getNextPlayerIndex(
+        newState.currentPlayerIndex,
+        newState.direction,
+        playerCount,
+        1
+      );
+      newState.currentColor = card.color as 'red' | 'yellow' | 'blue' | 'green';
+      newState.lastAction = {
+        type: 'drawTwoPlayed',
+        playerId,
+        card,
+        targetPlayerId: targetId,
+        timestamp: Date.now()
+      };
+      break;
+    }
+
+    case 'DrawFour': {
+      const target4Index = getNextPlayerIndex(
+        newState.currentPlayerIndex,
+        newState.direction,
+        playerCount
+      );
+      const target4Id = newState.playerOrder[target4Index];
+
+      // Draw 4 cards for the next player
+      const { newCards: drawn4, remainingPile: pile4 } = drawCards(newState.drawPile, 4);
+      newState.playerHands = { ...newState.playerHands };
+      newState.playerHands[target4Id] = [...(newState.playerHands[target4Id] || []), ...drawn4];
+      newState.drawPile = pile4;
+
+      // Skip the target player
+      newState.currentPlayerIndex = getNextPlayerIndex(
+        newState.currentPlayerIndex,
+        newState.direction,
+        playerCount,
+        1
+      );
+      newState.currentColor = chosenColor || 'red';
+      newState.lastAction = {
+        type: 'drawFourPlayed',
+        playerId,
+        card,
+        targetPlayerId: target4Id,
+        timestamp: Date.now()
+      };
+      break;
+    }
+
+    case 'Wild': {
+      newState.currentColor = chosenColor || 'red';
+      newState.currentPlayerIndex = getNextPlayerIndex(
+        newState.currentPlayerIndex,
+        newState.direction,
+        playerCount
+      );
+      newState.lastAction = { type: 'wildPlayed', playerId, card, timestamp: Date.now() };
+      break;
+    }
+
+    default: {
+      // Number card — just move to next player
+      newState.currentPlayerIndex = getNextPlayerIndex(
+        newState.currentPlayerIndex,
+        newState.direction,
+        playerCount
+      );
+      newState.currentColor = card.color as 'red' | 'yellow' | 'blue' | 'green';
+      newState.lastAction = { type: 'cardPlayed', playerId, card, timestamp: Date.now() };
+      break;
+    }
+  }
+
+  return newState;
+};
+
+// ─── Scoring ───────────────────────────────────────────────────────────────────
+
+export const getCardPoints = (card: Card): number => {
+  const num = parseInt(card.value);
+  if (!isNaN(num)) return num;
+  if (card.value === 'Skip' || card.value === 'Reverse' || card.value === 'DrawTwo') return 20;
+  if (card.value === 'Wild' || card.value === 'DrawFour') return 50;
+  return 0;
+};
+
+export const calculateWinnerPoints = (state: GameState, winnerId: string): number => {
+  let total = 0;
+  for (const [uid, hand] of Object.entries(state.playerHands)) {
+    if (uid !== winnerId) {
+      total += hand.reduce((sum, card) => sum + getCardPoints(card), 0);
+    }
+  }
+  return total;
 };

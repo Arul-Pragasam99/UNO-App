@@ -1,13 +1,18 @@
 'use client';
 
+import { useRef, useEffect } from 'react';
+import gsap from 'gsap';
 import { Card } from '@/lib/types';
+import CardFace from './CardFace';
 
 interface GameCardProps {
   card: Card;
   onClick?: () => void;
   isSelectable?: boolean;
   isSelected?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  isPlayable?: boolean;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  animate?: boolean;
 }
 
 const GameCard = ({
@@ -15,84 +20,88 @@ const GameCard = ({
   onClick,
   isSelectable = false,
   isSelected = false,
+  isPlayable = true,
   size = 'md',
+  animate = true,
 }: GameCardProps) => {
-  const getCardColor = () => {
-    switch (card.color) {
-      case 'red':
-        return 'bg-red-500';
-      case 'yellow':
-        return 'bg-yellow-400';
-      case 'blue':
-        return 'bg-blue-500';
-      case 'green':
-        return 'bg-green-500';
-      case 'wild':
-        return 'bg-gradient-to-br from-gray-800 to-black';
-      default:
-        return 'bg-gray-500';
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (animate && cardRef.current) {
+      gsap.fromTo(
+        cardRef.current,
+        { opacity: 0, scale: 0.8, y: 10 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: 'back.out(1.5)' }
+      );
     }
+  }, [animate]);
+
+  const handleClick = () => {
+    if (!isSelectable || !onClick) return;
+
+    if (cardRef.current) {
+      gsap.to(cardRef.current, {
+        scale: 0.95,
+        duration: 0.1,
+        yoyo: true,
+        repeat: 1,
+        ease: 'power2.inOut',
+      });
+    }
+
+    onClick();
   };
 
   const getSizeClasses = () => {
     switch (size) {
-      case 'sm':
-        return 'w-16 h-24';
-      case 'lg':
-        return 'w-28 h-40';
-      default:
-        return 'w-20 h-32';
+      case 'xs': return 'w-12 h-[72px]';
+      case 'sm': return 'w-14 h-[84px]';
+      case 'lg': return 'w-24 h-36';
+      default: return 'w-[72px] h-[108px]';
     }
-  };
-
-  const getCardValue = () => {
-    const valueMap: { [key: string]: string } = {
-      Skip: '⏩',
-      Reverse: '🔄',
-      DrawTwo: '+2',
-      Wild: '🌈',
-      DrawFour: '+4',
-    };
-    return valueMap[card.value] || card.value;
   };
 
   return (
     <div
-      onClick={onClick}
+      ref={cardRef}
+      onClick={handleClick}
+      data-card-id={card.id}
       className={`
         ${getSizeClasses()}
-        ${getCardColor()}
-        ${isSelectable ? 'cursor-pointer hover:shadow-2xl' : ''}
-        ${isSelected ? 'ring-4 ring-yellow-300 transform scale-110' : ''}
-        rounded-lg p-2 flex flex-col items-center justify-center
-        transition-all duration-300 transform hover:scale-105
-        shadow-lg border-2 border-white/30
-        relative
+        relative flex items-center justify-center
+        rounded-xl transition-all duration-200
+        ${isSelectable ? 'cursor-pointer active:scale-95' : ''}
+        ${isSelected ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-transparent -translate-y-3 sm:-translate-y-4' : ''}
+        ${isSelectable && isPlayable ? 'hover:-translate-y-2 sm:hover:-translate-y-3 hover:shadow-xl' : ''}
+        ${!isPlayable && isSelectable ? 'opacity-40 grayscale-[30%]' : ''}
+        transform-gpu
       `}
+      style={{ perspective: '600px' }}
     >
-      {/* Card content */}
-      <div className="text-white font-display font-bold text-center">
-        <div className={`text-${size === 'sm' ? '2xl' : size === 'lg' ? '5xl' : '3xl'}`}>
-          {getCardValue()}
-        </div>
-        {card.color !== 'wild' && (
-          <div className="text-xs mt-1 opacity-75">{card.color.toUpperCase()}</div>
-        )}
+      <div className="w-full h-full" style={{ transformStyle: 'preserve-3d' }}>
+        <CardFace card={card} size={size} />
       </div>
 
-      {/* Corner markers for larger cards */}
-      {size !== 'sm' && (
-        <>
-          <div className="absolute top-1 left-1 text-white/50 text-xs">
-            {getCardValue()}
-          </div>
-          <div className="absolute bottom-1 right-1 text-white/50 text-xs">
-            {getCardValue()}
-          </div>
-        </>
+      {/* Playable glow effect */}
+      {isSelectable && isPlayable && (
+        <div className="absolute inset-0 rounded-xl opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+          style={{
+            boxShadow: `0 0 15px ${getGlowColor(card.color)}, 0 0 30px ${getGlowColor(card.color)}`,
+          }}
+        />
       )}
     </div>
   );
+};
+
+const getGlowColor = (color: string): string => {
+  switch (color) {
+    case 'red': return 'rgba(239,68,68,0.5)';
+    case 'yellow': return 'rgba(234,179,8,0.5)';
+    case 'blue': return 'rgba(59,130,246,0.5)';
+    case 'green': return 'rgba(34,197,94,0.5)';
+    default: return 'rgba(168,85,247,0.5)';
+  }
 };
 
 export default GameCard;
