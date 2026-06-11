@@ -1,3 +1,5 @@
+// ─── Player Types ───────────────────────────────────────────────────────────────
+
 export interface Player {
   uid: string;
   name: string;
@@ -24,6 +26,8 @@ export interface PlayerStats {
   joinedAt: Date;
 }
 
+// ─── Card Types ─────────────────────────────────────────────────────────────────
+
 export type CardColor = 'red' | 'yellow' | 'blue' | 'green' | 'wild';
 
 export interface Card {
@@ -33,6 +37,8 @@ export interface Card {
   /** When a wild card is played, this stores the chosen color */
   chosenColor?: 'red' | 'yellow' | 'blue' | 'green';
 }
+
+// ─── Game Room Types ────────────────────────────────────────────────────────────
 
 export interface GameRoom {
   roomId: string;
@@ -48,6 +54,8 @@ export interface GameRoom {
   maxPlayers: number;
   expiresAt?: Date;
 }
+
+// ─── Game State & Action Types ──────────────────────────────────────────────────
 
 export type GameAction =
   | 'cardPlayed'
@@ -80,19 +88,25 @@ export interface GameState {
   currentPlayerIndex: number;
   /** 1 = clockwise, -1 = counterclockwise */
   direction: 1 | -1;
+  /** Discard pile (top card is the last element) */
   discardPile: Card[];
+  /** Remaining cards in draw pile */
   drawPile: Card[];
   /** Pending draw count from stacked +2/+4 */
   pendingDraw: number;
   /** Current active color (changes when wild is played) */
   currentColor: 'red' | 'yellow' | 'blue' | 'green';
-  /** Players who have called UNO (when they have 2 cards) */
+  /** Players who have called UNO (when they have 1 card left) */
   unoCalledBy: string[];
   /** Last action for animation triggers */
   lastAction?: LastAction;
+  /** Winner's UID (set when game is finished) */
   winner?: string;
+  /** Game status */
   status: 'playing' | 'finished';
 }
+
+// ─── Toast Types ────────────────────────────────────────────────────────────────
 
 export interface ToastMessage {
   id: string;
@@ -100,3 +114,15 @@ export interface ToastMessage {
   type: 'success' | 'error' | 'warning' | 'info';
   duration?: number;
 }
+
+// ─── Helper Type Guard Functions ────────────────────────────────────────────────
+
+/** Type guard to check if a value is a valid card color */
+export const isValidCardColor = (color: any): color is 'red' | 'yellow' | 'blue' | 'green' => {
+  return ['red', 'yellow', 'blue', 'green'].includes(color);
+};
+
+/** Type guard to check if a value is a valid direction */
+export const isValidDirection = (direction: any): direction is 1 | -1 => {
+  return direction === 1 || direction === -1;
+};
