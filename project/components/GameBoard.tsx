@@ -24,7 +24,7 @@ const GameBoard = ({
   isMyTurn = false,
 }: GameBoardProps) => {
   const discardRef = useRef<HTMLDivElement>(null);
-  const drawRef = useRef<HTMLDivElement>(null);
+  const drawRef = useRef<HTMLButtonElement>(null); // ✅ Fixed: changed from HTMLDivElement to HTMLButtonElement
   const directionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
