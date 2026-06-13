@@ -1,57 +1,61 @@
-// Firestore Rules
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow users to read/write their own player data
-    match /players/{uid} {
-      allow read: if request.auth.uid == uid;
-      allow create: if request.auth.uid == uid && request.resource.data.uid == uid;
-      allow update: if request.auth.uid == uid;
+    
+    // Helper: Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
     }
-
-    // Player stats
-    match /playerStats/{uid} {
-      allow read: if request.auth.uid == uid;
-      allow create: if request.auth.uid == uid;
-      allow update: if request.auth.uid == uid;
+    
+    // Helper: Get authenticated user ID
+    function getUserId() {
+      return request.auth.uid;
     }
-
-    // Game rooms - anyone can read, but only creator can write
+    
+    // Helper: Check if user is in a specific game room
+    function isPlayerInRoom(roomId) {
+      return exists(/databases/$(database)/documents/gameRooms/$(roomId)) &&
+        get(/databases/$(database)/documents/gameRooms/$(roomId)).data.players[getUserId()] != null;
+    }
+    
+    // Helper: Check if user is the room creator
+    function isRoomCreator(roomId) {
+      return get(/databases/$(database)/documents/gameRooms/$(roomId)).data.createdBy == getUserId();
+    }
+    
+    // ========== PLAYERS COLLECTION ==========
+    match /players/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && userId == getUserId();
+      allow update: if isAuthenticated() && userId == getUserId();
+      allow delete: if false;
+    }
+    
+    // ========== PLAYER STATS COLLECTION ==========
+    match /playerStats/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && userId == getUserId();
+      allow update: if isAuthenticated() && userId == getUserId();
+      allow delete: if false;
+    }
+    
+    // ========== GAME ROOMS COLLECTION ==========
     match /gameRooms/{roomId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth.uid == resource.data.createdBy || request.auth.uid == resource.data.player2?.uid;
-      allow delete: if request.auth.uid == resource.data.createdBy;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+        (resource.data.players[getUserId()] != null || resource.data.createdBy == getUserId());
+      allow delete: if isAuthenticated() && 
+        (resource.data.createdBy == getUserId() || resource.data.expiresAt < request.time);
     }
-
-    // Game states
-    match /gameStates/{gameId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-
-    // Leaderboard
-    match /leaderboard/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if false;
-    }
-  }
-}
-
-// Realtime Database Rules
-{
-  "rules": {
-    "gameRooms": {
-      "$roomId": {
-        ".read": "auth != null",
-        ".write": "root.child('gameRooms').child($roomId).child('createdBy').val() === auth.uid || root.child('gameRooms').child($roomId).child('player2').child('uid').val() === auth.uid"
-      }
-    },
-    "gameStates": {
-      "$gameId": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
+    
+    // ========== GAME STATES COLLECTION ==========
+    match /gameStates/{roomId} {
+      allow read: if isAuthenticated() && isPlayerInRoom(roomId);
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && isPlayerInRoom(roomId);
+      allow delete: if false;
     }
   }
 }

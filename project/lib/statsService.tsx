@@ -1,8 +1,6 @@
 import { db } from './firebase';
-import { doc, getDoc, setDoc, updateDoc, increment, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, collection, query, orderBy, limit, getDocs, runTransaction } from 'firebase/firestore';
 import { PlayerStats } from './types';
-
-// ─── Initialize Player Stats ───────────────────────────────────────────────────
 
 export const initializePlayerStats = async (
   uid: string,
@@ -32,13 +30,11 @@ export const initializePlayerStats = async (
     };
     await setDoc(statsRef, initialStats);
   } else {
-    // Update profile info on each login
     await updateDoc(statsRef, { name, email, photoURL });
   }
 };
 
-// ─── Update Game Result ────────────────────────────────────────────────────────
-
+// FIXED: Using transaction to prevent race conditions
 export const updateGameResult = async (
   uid: string,
   won: boolean,
@@ -49,36 +45,38 @@ export const updateGameResult = async (
   const statsRef = doc(db, 'playerStats', uid);
 
   try {
-    const statsSnap = await getDoc(statsRef);
-    const currentStats = statsSnap.data() as PlayerStats | undefined;
+    await runTransaction(db, async (transaction) => {
+      const statsDoc = await transaction.get(statsRef);
+      const currentStats = statsDoc.data() as PlayerStats | undefined;
 
-    const currentStreak = currentStats?.currentStreak || 0;
-    const longestWinStreak = currentStats?.longestWinStreak || 0;
+      const currentStreak = currentStats?.currentStreak || 0;
+      const longestWinStreak = currentStats?.longestWinStreak || 0;
+      const currentWins = currentStats?.wins || 0;
+      const currentTotal = currentStats?.totalGames || 0;
 
-    const newStreak = won ? currentStreak + 1 : 0;
-    const newLongest = Math.max(longestWinStreak, newStreak);
-    const newWins = (currentStats?.wins || 0) + (won ? 1 : 0);
-    const newTotal = (currentStats?.totalGames || 0) + 1;
-    const newWinRate = newTotal > 0 ? Math.round((newWins / newTotal) * 100) : 0;
+      const newStreak = won ? currentStreak + 1 : 0;
+      const newLongest = Math.max(longestWinStreak, newStreak);
+      const newWins = currentWins + (won ? 1 : 0);
+      const newTotal = currentTotal + 1;
+      const newWinRate = newTotal > 0 ? Math.round((newWins / newTotal) * 100) : 0;
 
-    await updateDoc(statsRef, {
-      totalGames: increment(1),
-      wins: increment(won ? 1 : 0),
-      losses: increment(won ? 0 : 1),
-      totalPoints: increment(points),
-      cardsPlayed: increment(cardsPlayed),
-      unosCalled: increment(unosCalled),
-      currentStreak: newStreak,
-      longestWinStreak: newLongest,
-      winRate: newWinRate,
-      lastPlayedAt: new Date(),
+      transaction.update(statsRef, {
+        totalGames: newTotal,
+        wins: newWins,
+        losses: (currentStats?.losses || 0) + (won ? 0 : 1),
+        totalPoints: (currentStats?.totalPoints || 0) + points,
+        cardsPlayed: (currentStats?.cardsPlayed || 0) + cardsPlayed,
+        unosCalled: (currentStats?.unosCalled || 0) + unosCalled,
+        currentStreak: newStreak,
+        longestWinStreak: newLongest,
+        winRate: newWinRate,
+        lastPlayedAt: new Date(),
+      });
     });
   } catch (error) {
     console.error('Error updating game result:', error);
   }
 };
-
-// ─── Get Player Stats ──────────────────────────────────────────────────────────
 
 export const getPlayerStats = async (uid: string): Promise<PlayerStats | null> => {
   try {
@@ -93,8 +91,6 @@ export const getPlayerStats = async (uid: string): Promise<PlayerStats | null> =
     return null;
   }
 };
-
-// ─── Leaderboard ───────────────────────────────────────────────────────────────
 
 export const getLeaderboard = async (count: number = 10): Promise<PlayerStats[]> => {
   try {

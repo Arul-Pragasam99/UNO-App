@@ -20,7 +20,6 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!loading) {
-      // Animate on mount
       gsap.fromTo(
         containerRef.current,
         { opacity: 0, scale: 0.9 },
@@ -41,7 +40,6 @@ export default function LoginPage() {
       await loginWithGoogle();
     } catch (error) {
       console.error('Login failed:', error);
-      // Error is already handled in authContext and set in error state
     } finally {
       setIsLoggingIn(false);
     }
@@ -49,9 +47,9 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-800">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="animate-spin">
-          <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full"></div>
+          <div className="w-16 h-16 border-4 border-gray-300 border-t-gray-600 rounded-full"></div>
         </div>
       </div>
     );
@@ -60,23 +58,23 @@ export default function LoginPage() {
   return (
     <div
       ref={containerRef}
-      className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700"
+      className="min-h-screen flex items-center justify-center px-4 bg-gray-100"
     >
-      {/* Animated background elements */}
+      {/* Animated background elements - subtle grey tones */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-        <div className="absolute top-40 right-10 w-72 h-72 bg-red-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
-        <div className="absolute bottom-20 left-1/2 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+        <div className="absolute top-20 left-10 w-72 h-72 bg-gray-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+        <div className="absolute top-40 right-10 w-72 h-72 bg-gray-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute bottom-20 left-1/2 w-72 h-72 bg-gray-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
       </div>
 
       <div
         ref={cardRef}
-        className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur rounded-3xl shadow-2xl p-8 md:p-10"
+        className="relative z-10 w-full max-w-md bg-white rounded-3xl shadow-xl p-8 md:p-10"
       >
         {/* Error Message Display */}
         {error && (
           <div
-            className="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg flex justify-between items-start animate-pulse"
+            className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-lg flex justify-between items-start"
             role="alert"
           >
             <div className="flex-1">
@@ -93,15 +91,15 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* UNO Logo */}
+        {/* UNO Logo - Grey Theme */}
         <div className="flex justify-center mb-8">
           <div className="relative">
             <div className="text-5xl md:text-6xl font-display font-bold text-center">
-              <span className="text-red-500">U</span>
-              <span className="text-yellow-500">N</span>
-              <span className="text-green-500">O</span>
+              <span className="text-gray-800">U</span>
+              <span className="text-gray-700">N</span>
+              <span className="text-gray-600">O</span>
             </div>
-            <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 h-1 w-20 bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 rounded-full blur-sm"></div>
+            <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 h-1 w-20 bg-gradient-to-r from-gray-400 via-gray-500 to-gray-600 rounded-full blur-sm"></div>
           </div>
         </div>
 
@@ -110,48 +108,46 @@ export default function LoginPage() {
           <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-800 mb-2">
             Play with Friends
           </h1>
-          <p className="text-gray-600 font-body text-sm md:text-base">
+          <p className="text-gray-500 font-body text-sm md:text-base">
             Challenge your friends to exciting UNO matches. Create rooms or play 1v1 games.
           </p>
         </div>
 
-        {/* Features */}
+        {/* Features - Grey Theme */}
         <div className="space-y-4 mb-8">
           <div className="flex items-start gap-3">
             <span className="text-2xl">🎮</span>
             <div>
               <h3 className="font-semibold text-gray-800">Real-time Gameplay</h3>
-              <p className="text-sm text-gray-600">Play live matches with instant updates</p>
+              <p className="text-sm text-gray-500">Play live matches with instant updates</p>
             </div>
           </div>
           <div className="flex items-start gap-3">
             <span className="text-2xl">👥</span>
             <div>
               <h3 className="font-semibold text-gray-800">Create Rooms</h3>
-              <p className="text-sm text-gray-600">Share codes with friends to join games</p>
+              <p className="text-sm text-gray-500">Share codes with friends to join games</p>
             </div>
           </div>
           <div className="flex items-start gap-3">
             <span className="text-2xl">📊</span>
             <div>
               <h3 className="font-semibold text-gray-800">Track Stats</h3>
-              <p className="text-sm text-gray-600">Monitor your wins, losses, and rankings</p>
+              <p className="text-sm text-gray-500">Monitor your wins, losses, and rankings</p>
             </div>
           </div>
         </div>
 
-        {/* Login Button with Original Google Icon */}
+        {/* Login Button - Grey Theme */}
         <button
           onClick={handleLogin}
           disabled={isLoggingIn}
-          className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 disabled:bg-gray-100 text-gray-700 font-semibold py-4 rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:scale-100 disabled:hover:scale-100 shadow-lg hover:shadow-xl border border-gray-300 disabled:opacity-75 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-3 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-400 text-white font-semibold py-4 rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:scale-100 shadow-lg hover:shadow-xl disabled:opacity-75 disabled:cursor-not-allowed"
         >
-          {/* Loading Spinner */}
           {isLoggingIn && (
-            <div className="w-5 h-5 border-2 border-gray-700 border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           )}
 
-          {/* Original Google SVG Icon */}
           {!isLoggingIn && (
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -177,36 +173,20 @@ export default function LoginPage() {
         </button>
 
         {/* Footer */}
-        <p className="text-center text-xs text-gray-500 mt-8">
+        <p className="text-center text-xs text-gray-400 mt-8">
           By continuing, you agree to our Terms of Service
         </p>
       </div>
 
       <style jsx>{`
         @keyframes blob {
-          0%,
-          100% {
-            transform: translate(0, 0) scale(1);
-          }
-          33% {
-            transform: translate(30px, -50px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
         }
-
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
       `}</style>
     </div>
   );

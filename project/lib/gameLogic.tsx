@@ -10,7 +10,7 @@ export const generateUnoDeck = (): Card[] => {
 
   colors.forEach((color) => {
     values.forEach((value, idx) => {
-      if (idx === 0) {
+      if (value === '0') {
         // Only one zero per color
         deck.push({ id: `${color}-${value}-0`, color, value });
       } else {
@@ -39,20 +39,72 @@ export const shuffleDeck = (deck: Card[]): Card[] => {
   return shuffled;
 };
 
-// ─── Card Playability ──────────────────────────────────────────────────────────
+// ─── Card Playability (FIXED) ──────────────────────────────────────────────────────────
 
 /** Check if a card can be played on the current top card */
 export const canPlayCard = (card: Card, topCard: Card, currentColor: string): boolean => {
+  // Wild cards can always be played
   if (card.color === 'wild') return true;
-  if (card.color === currentColor) return true;
-  if (card.value === topCard.value && topCard.color !== 'wild') return true;
+  
+  // If top card is wild, use the current game color
+  const topColor = topCard.color === 'wild' ? currentColor : topCard.color;
+  
+  // Same color
+  if (card.color === topColor) return true;
+  
+  // Same value (number or action) - only if top card is not wild
+  if (topCard.color !== 'wild' && card.value === topCard.value) return true;
+  
   return false;
+};
+
+// ─── Draw Pile Reshuffle (NEW) ──────────────────────────────────────────────────────────
+
+/** Reshuffle discard pile into draw pile when draw pile is empty */
+export const reshuffleDiscardPile = (state: GameState): GameState => {
+  if (state.drawPile.length > 0) return state;
+  
+  const topCard = state.discardPile[state.discardPile.length - 1];
+  const cardsToShuffle = state.discardPile.slice(0, -1);
+  const shuffled = shuffleDeck(cardsToShuffle);
+  
+  return {
+    ...state,
+    drawPile: shuffled,
+    discardPile: [topCard],
+  };
+};
+
+/** Draw cards with automatic reshuffle handling */
+export const drawCardsWithReshuffle = (
+  state: GameState,
+  count: number
+): { newState: GameState; drawnCards: Card[] } => {
+  let currentState = { ...state };
+  let drawnCards: Card[] = [];
+  
+  for (let i = 0; i < count; i++) {
+    if (currentState.drawPile.length === 0) {
+      currentState = reshuffleDiscardPile(currentState);
+    }
+    
+    if (currentState.drawPile.length === 0) {
+      // No cards left to draw
+      break;
+    }
+    
+    const card = currentState.drawPile[0];
+    drawnCards.push(card);
+    currentState.drawPile = currentState.drawPile.slice(1);
+  }
+  
+  return { newState: currentState, drawnCards };
 };
 
 // ─── Game Code ─────────────────────────────────────────────────────────────────
 
 export const generateGameCode = (): string => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars (0/O, 1/I)
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
@@ -73,21 +125,18 @@ export const drawCards = (
 
 // ─── Multi-Player Turn Management ──────────────────────────────────────────────
 
-/** Get the next player index based on direction */
 export const getNextPlayerIndex = (
   currentIndex: number,
   direction: 1 | -1,
   playerCount: number,
   skip: number = 0
 ): number => {
-  // skip=0 means next player, skip=1 means skip one player
   const steps = 1 + skip;
   let next = (currentIndex + direction * steps) % playerCount;
   if (next < 0) next += playerCount;
   return next;
 };
 
-/** Get the UID of the next player */
 export const getNextPlayerId = (state: GameState, skip: number = 0): string => {
   const nextIndex = getNextPlayerIndex(
     state.currentPlayerIndex,
@@ -98,26 +147,18 @@ export const getNextPlayerId = (state: GameState, skip: number = 0): string => {
   return state.playerOrder[nextIndex];
 };
 
-/** Get the current player's UID */
 export const getCurrentPlayerId = (state: GameState): string => {
   return state.playerOrder[state.currentPlayerIndex];
 };
 
-// ─── Get Top Card ──────────────────────────────────────────────────────────────
-
-/** Get the top card from the discard pile */
 export const getTopCard = (state: GameState): Card => {
   return state.discardPile[state.discardPile.length - 1];
 };
 
-// ─── Player Hand Management ────────────────────────────────────────────────────
-
-/** Get a specific player's hand */
 export const getPlayerHand = (state: GameState, playerId: string): Card[] => {
   return state.playerHands[playerId] || [];
 };
 
-/** Get all playable cards for a player */
 export const getPlayableCards = (state: GameState, playerId: string): Card[] => {
   const hand = getPlayerHand(state, playerId);
   const topCard = getTopCard(state);
@@ -126,7 +167,6 @@ export const getPlayableCards = (state: GameState, playerId: string): Card[] => 
 
 // ─── Initialize Game State ─────────────────────────────────────────────────────
 
-/** Create initial game state for N players */
 export const initializeGameState = (
   roomId: string,
   playerOrder: string[]
@@ -144,12 +184,10 @@ export const initializeGameState = (
 
   const remainingDeck = deck.slice(cardIndex);
 
-  // Find first non-wild card for discard pile
   let discardIndex = 0;
   while (discardIndex < remainingDeck.length && remainingDeck[discardIndex].color === 'wild') {
     discardIndex++;
   }
-  // If all remaining are wild (extremely unlikely), just use the first one
   if (discardIndex >= remainingDeck.length) discardIndex = 0;
 
   const discardCard = remainingDeck[discardIndex];
@@ -167,32 +205,41 @@ export const initializeGameState = (
     discardPile: [discardCard],
     drawPile,
     pendingDraw: 0,
-    currentColor: discardCard.color as 'red' | 'yellow' | 'blue' | 'green',
+    currentColor: discardCard.color === 'wild' ? 'red' : (discardCard.color as 'red' | 'yellow' | 'blue' | 'green'),
     unoCalledBy: [],
     status: 'playing',
   };
 };
 
-// ─── Handle Special Cards ──────────────────────────────────────────────────────
+// ─── Handle Special Cards (FIXED - added reshuffle support) ──────────────────────────────────────────────────────
 
-/** Apply the effect of a played card and return updated state */
 export const applyCardEffect = (
   state: GameState,
   card: Card,
   playerId: string,
   chosenColor?: 'red' | 'yellow' | 'blue' | 'green'
 ): GameState => {
-  const newState = { ...state };
+  let newState = { ...state };
   const playerCount = newState.playerOrder.length;
+
+  // Ensure draw pile has cards before drawing
+  const ensureDrawPile = (count: number) => {
+    let tempState = newState;
+    for (let i = 0; i < count; i++) {
+      if (tempState.drawPile.length === 0) {
+        tempState = reshuffleDiscardPile(tempState);
+      }
+    }
+    return tempState;
+  };
 
   switch (card.value) {
     case 'Skip': {
-      // Skip next player
       newState.currentPlayerIndex = getNextPlayerIndex(
         newState.currentPlayerIndex,
         newState.direction,
         playerCount,
-        1 // skip 1
+        1
       );
       newState.currentColor = card.color as 'red' | 'yellow' | 'blue' | 'green';
       newState.lastAction = {
@@ -206,7 +253,6 @@ export const applyCardEffect = (
 
     case 'Reverse': {
       if (playerCount === 2) {
-        // In 2-player, Reverse acts like Skip
         newState.currentPlayerIndex = getNextPlayerIndex(
           newState.currentPlayerIndex,
           newState.direction,
@@ -239,7 +285,9 @@ export const applyCardEffect = (
       );
       const targetId = newState.playerOrder[targetIndex];
 
-      // Draw 2 cards for the next player
+      // Ensure draw pile has cards
+      newState = ensureDrawPile(2);
+      
       const { newCards, remainingPile } = drawCards(newState.drawPile, 2);
       newState.playerHands = { ...newState.playerHands };
       newState.playerHands[targetId] = [
@@ -248,7 +296,6 @@ export const applyCardEffect = (
       ];
       newState.drawPile = remainingPile;
 
-      // Skip the target player
       newState.currentPlayerIndex = getNextPlayerIndex(
         newState.currentPlayerIndex,
         newState.direction,
@@ -267,23 +314,24 @@ export const applyCardEffect = (
     }
 
     case 'DrawFour': {
-      const target4Index = getNextPlayerIndex(
+      const targetIndex = getNextPlayerIndex(
         newState.currentPlayerIndex,
         newState.direction,
         playerCount
       );
-      const target4Id = newState.playerOrder[target4Index];
+      const targetId = newState.playerOrder[targetIndex];
 
-      // Draw 4 cards for the next player
-      const { newCards: drawn4, remainingPile: pile4 } = drawCards(newState.drawPile, 4);
+      // Ensure draw pile has cards
+      newState = ensureDrawPile(4);
+      
+      const { newCards, remainingPile } = drawCards(newState.drawPile, 4);
       newState.playerHands = { ...newState.playerHands };
-      newState.playerHands[target4Id] = [
-        ...(newState.playerHands[target4Id] || []),
-        ...drawn4,
+      newState.playerHands[targetId] = [
+        ...(newState.playerHands[targetId] || []),
+        ...newCards,
       ];
-      newState.drawPile = pile4;
+      newState.drawPile = remainingPile;
 
-      // Skip the target player
       newState.currentPlayerIndex = getNextPlayerIndex(
         newState.currentPlayerIndex,
         newState.direction,
@@ -295,7 +343,7 @@ export const applyCardEffect = (
         type: 'drawFourPlayed',
         playerId,
         card,
-        targetPlayerId: target4Id,
+        targetPlayerId: targetId,
         timestamp: Date.now(),
       };
       break;
@@ -318,7 +366,6 @@ export const applyCardEffect = (
     }
 
     default: {
-      // Number card — just move to next player
       newState.currentPlayerIndex = getNextPlayerIndex(
         newState.currentPlayerIndex,
         newState.direction,
@@ -359,9 +406,6 @@ export const calculateWinnerPoints = (state: GameState, winnerId: string): numbe
   return total;
 };
 
-// ─── Game Room Helpers ────────────────────────────────────────────────────────
-
-/** Initialize a game room */
 export const initializeGameRoom = (
   roomId: string,
   createdBy: string,
@@ -376,7 +420,7 @@ export const initializeGameRoom = (
     status: 'waiting',
     createdAt: new Date(),
     gameCode: generateGameCode(),
-    maxPlayers: gameType === 'oneVsOne' ? 2 : 4,
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Expires in 24 hours
+    maxPlayers: gameType === 'oneVsOne' ? 2 : 10,
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
   };
 };

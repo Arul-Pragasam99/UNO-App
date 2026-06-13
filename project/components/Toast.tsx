@@ -38,23 +38,39 @@ const ToastItem = ({
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (ref.current) {
-      gsap.fromTo(
-        ref.current,
-        { opacity: 0, y: -20, scale: 0.95 },
-        { opacity: 1, y: 0, scale: 1, duration: 0.3, ease: 'back.out(1.5)' }
-      );
-    }
-    if (progressRef.current) {
-      gsap.fromTo(
-        progressRef.current,
-        { scaleX: 1 },
-        { scaleX: 0, duration: duration / 1000, ease: 'none' }
-      );
-    }
-  }, [duration]);
+    const ctx = gsap.context(() => {
+      if (ref.current) {
+        gsap.fromTo(
+          ref.current,
+          { opacity: 0, y: -20, scale: 0.95 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.3, ease: 'back.out(1.5)' }
+        );
+      }
+      
+      if (progressRef.current) {
+        gsap.fromTo(
+          progressRef.current,
+          { scaleX: 1 },
+          { scaleX: 0, duration: duration / 1000, ease: 'none' }
+        );
+      }
+    }, ref);
+
+    // Auto-remove after duration
+    timeoutRef.current = setTimeout(() => {
+      onRemove(id);
+    }, duration);
+
+    return () => {
+      ctx.revert();
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [duration, id, onRemove]);
 
   const getColors = () => {
     switch (type) {
