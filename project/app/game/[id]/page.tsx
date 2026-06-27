@@ -358,7 +358,7 @@ export default function GamePage() {
     }
   };
 
-  // ========== LOADING SCREEN WITH BOUNCING VIDEO GAME EMOJI & WHITE GLOW ==========
+  // ========== LOADING SCREEN WITH FIXED MESSAGE ==========
   if (authLoading || !gameInitialized || !room || !gameState) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 relative overflow-hidden">
@@ -431,8 +431,13 @@ export default function GamePage() {
                   </svg>
                 </button>
               </div>
+              {/* ===== FIXED: Correct message for 2-10 players ===== */}
               <p className="text-xs text-gray-400 mt-2">
-                Game will start when {room.maxPlayers - room.playerOrder.length} more player{room.maxPlayers - room.playerOrder.length !== 1 ? 's' : ''} join
+                {room.playerOrder.length < 2 ? (
+                  `Game will start when ${2 - room.playerOrder.length} more player${2 - room.playerOrder.length !== 1 ? 's' : ''} join`
+                ) : (
+                  `Game is ready! (${room.playerOrder.length} / ${room.maxPlayers} players)`
+                )}
               </p>
             </div>
           )}
@@ -748,4 +753,4 @@ export default function GamePage() {
       </div>
     </div>
   );
-} 
+}
