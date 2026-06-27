@@ -5,7 +5,7 @@ import Toast from '@/components/Toast';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'UNO - Play with Friends',
+  title: 'UNO - Play Together',
   description: 'Play UNO card game with friends online. Create rooms or play 1v1 matches.',
   icons: {
     icon: '/icon.png',
