@@ -7,6 +7,9 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'UNO - Play with Friends',
   description: 'Play UNO card game with friends online. Create rooms or play 1v1 matches.',
+  icons: {
+    icon: '/icon.png',
+  },
 };
 
 export const viewport: Viewport = {
@@ -25,6 +28,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#667eea" />
+        <link rel="icon" href="/icon.png" type="image/png" />
       </head>
       <body className="antialiased">
         <AuthProvider>
