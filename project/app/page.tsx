@@ -132,7 +132,7 @@ export default function LoginPage() {
           {/* Title and Description */}
           <div className="text-center mb-10">
             <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-800 mb-2">
-              Play with Friends
+              Play Together
             </h1>
             <p className="text-gray-500 font-body text-sm md:text-base">
               Challenge your friends to exciting UNO matches. Create rooms or play 1v1 games.
