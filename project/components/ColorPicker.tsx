@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import gsap from 'gsap';
 
 interface ColorPickerProps {
@@ -11,8 +11,18 @@ interface ColorPickerProps {
 const ColorPicker = ({ onColorSelect, isOpen }: ColorPickerProps) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  // FIXED: guard against double-tap firing onColorSelect twice for the same
+  // wild card while the fade-out animation is still in flight. Without this,
+  // a second tap during the 0.2s gsap.to window queues a second onComplete,
+  // which calls handleColorSelect again in the parent and can double-write
+  // updateGameResult for every player in the room.
+  const [hasSelected, setHasSelected] = useState(false);
 
   useEffect(() => {
+    if (isOpen) {
+      // Reset the guard whenever a fresh wild card triggers the picker.
+      setHasSelected(false);
+    }
     if (isOpen && pickerRef.current) {
       gsap.fromTo(
         pickerRef.current,
@@ -32,7 +42,14 @@ const ColorPicker = ({ onColorSelect, isOpen }: ColorPickerProps) => {
   ];
 
   const handleSelect = (color: 'red' | 'yellow' | 'blue' | 'green') => {
+    // FIXED: bail out immediately if a selection was already made — this is
+    // the actual guard. The ref-based animation kill below closes the gap
+    // for any tween still in flight on a rapid second tap.
+    if (hasSelected) return;
+    setHasSelected(true);
+
     if (pickerRef.current) {
+      gsap.killTweensOf(pickerRef.current);
       gsap.to(pickerRef.current, {
         scale: 0.8,
         opacity: 0,
@@ -62,11 +79,13 @@ const ColorPicker = ({ onColorSelect, isOpen }: ColorPickerProps) => {
             <button
               key={name}
               onClick={() => handleSelect(name)}
+              disabled={hasSelected}
               className="
                 aspect-square rounded-2xl flex flex-col items-center justify-center gap-2
                 transition-transform duration-200 active:scale-90
                 hover:scale-105 border-2 border-white/20 hover:border-white/50
                 min-h-[80px] sm:min-h-[100px]
+                disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
               "
               style={{
                 backgroundColor: bg,

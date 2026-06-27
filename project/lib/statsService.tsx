@@ -35,12 +35,16 @@ export const initializePlayerStats = async (
 };
 
 // FIXED: Using transaction to prevent race conditions
+// FIXED: Added roomId param — required by Firestore rules so the winner's
+// client is allowed to write the loser's stats doc (see sharesFinishedGameWith
+// in firestore.rules). Without this field the write is permission-denied.
 export const updateGameResult = async (
   uid: string,
   won: boolean,
   points: number = 0,
   cardsPlayed: number = 0,
-  unosCalled: number = 0
+  unosCalled: number = 0,
+  roomId?: string
 ): Promise<void> => {
   const statsRef = doc(db, 'playerStats', uid);
 
@@ -71,6 +75,7 @@ export const updateGameResult = async (
         longestWinStreak: newLongest,
         winRate: newWinRate,
         lastPlayedAt: new Date(),
+        lastGameRoomId: roomId || null,
       });
     });
   } catch (error) {

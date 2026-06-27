@@ -46,6 +46,14 @@ export default function GamePage() {
   const [loadingMessage, setLoadingMessage] = useState('Loading game...');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [pendingWildCard, setPendingWildCard] = useState<Card | null>(null);
+  // FIXED: in-flight guard against double-tap / double-fire calling playCard,
+  // handleColorSelect, or drawCard twice for the same move before the first
+  // call's Firestore writes (and updateGameResult calls) have completed.
+  // Without this, a fast double-tap on a winning move can double-write
+  // stats for every player in the room even with the rules-side fixes in
+  // place, since those only prevent UNAUTHORIZED writes, not duplicate
+  // legitimate ones from the same authenticated client.
+  const [isMoveInFlight, setIsMoveInFlight] = useState(false);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -148,7 +156,13 @@ export default function GamePage() {
   // Handle color selection for wild cards
   const handleColorSelect = async (color: 'red' | 'yellow' | 'blue' | 'green') => {
     if (!pendingWildCard || !gameState || !user) return;
-    
+    // FIXED: bail out if a move is already being processed — prevents a
+    // double-tap from queuing two color selections for the same wild card,
+    // which would otherwise double-write gameStates and double-call
+    // updateGameResult for every player when the move is a winning one.
+    if (isMoveInFlight) return;
+    setIsMoveInFlight(true);
+
     setShowColorPicker(false);
     
     try {
@@ -170,20 +184,44 @@ export default function GamePage() {
       if (newGameState.playerHands[user.uid].length === 0) {
         newGameState.status = 'finished';
         newGameState.winner = user.uid;
-        
-        // Update stats
+
+        // IMPORTANT: write gameStates with status:'finished' to Firestore
+        // BEFORE calling updateGameResult for the other players. The rule
+        // that allows this client to write another player's stats doc
+        // checks gameStates/{roomId}.status == 'finished' at write time —
+        // if that hasn't landed yet, the rule still sees 'playing' and
+        // denies the cross-player write. (Same fix already applied in
+        // playCard — this brings handleColorSelect in line with it.)
+        const gameStateRef = doc(db, 'gameStates', roomId);
+        await updateDoc(gameStateRef, {
+          playerHands: newGameState.playerHands,
+          discardPile: newGameState.discardPile,
+          currentPlayerIndex: newGameState.currentPlayerIndex,
+          currentColor: newGameState.currentColor,
+          direction: newGameState.direction,
+          status: newGameState.status,
+          winner: newGameState.winner,
+          lastAction: newGameState.lastAction,
+        });
+
+        // Update winner stats
         const points = calculateWinnerPoints(newGameState, user.uid);
-        await updateGameResult(user.uid, true, points, gameState.playerHands[user.uid].length);
-        
-        // Update loser stats
+        await updateGameResult(user.uid, true, points, gameState.playerHands[user.uid].length, 0, roomId);
+
+        // Update loser stats — gameStates is already 'finished' at this point,
+        // so the cross-player write is permitted by the rule.
         for (const playerId of newGameState.playerOrder) {
           if (playerId !== user.uid) {
-            await updateGameResult(playerId, false, 0, 0);
+            await updateGameResult(playerId, false, 0, 0, 0, roomId);
           }
         }
+
+        setPendingWildCard(null);
+        setError(null);
+        return;
       }
-      
-      // Update Firestore
+
+      // Non-winning move: update Firestore as normal
       const gameStateRef = doc(db, 'gameStates', roomId);
       await updateDoc(gameStateRef, {
         playerHands: newGameState.playerHands,
@@ -201,6 +239,8 @@ export default function GamePage() {
     } catch (err) {
       console.error('Error playing wild card:', err);
       setError('Failed to play card');
+    } finally {
+      setIsMoveInFlight(false);
     }
   };
 
@@ -235,6 +275,13 @@ export default function GamePage() {
       return;
     }
 
+    // FIXED: bail out if a move is already being processed — prevents a
+    // fast double-tap on the second confirm-tap (see PlayerHand.tsx) from
+    // calling playCard twice for the same card before the first call's
+    // Firestore writes and updateGameResult calls have completed.
+    if (isMoveInFlight) return;
+    setIsMoveInFlight(true);
+
     try {
       let newGameState = { ...gameState };
       
@@ -254,22 +301,43 @@ export default function GamePage() {
       if (newGameState.playerHands[user.uid].length === 0) {
         newGameState.status = 'finished';
         newGameState.winner = user.uid;
-        
+
+        // IMPORTANT: write the finished game state to Firestore BEFORE
+        // calling updateGameResult for other players. The Firestore rule
+        // that allows this client to update another player's stats doc
+        // checks gameStates/{roomId}.status == 'finished' — if that write
+        // hasn't landed yet, the rule still sees 'playing' and denies it.
+        const gameStateRefEarly = doc(db, 'gameStates', roomId);
+        await updateDoc(gameStateRefEarly, {
+          playerHands: newGameState.playerHands,
+          discardPile: newGameState.discardPile,
+          currentPlayerIndex: newGameState.currentPlayerIndex,
+          currentColor: newGameState.currentColor,
+          direction: newGameState.direction,
+          status: newGameState.status,
+          winner: newGameState.winner,
+          lastAction: newGameState.lastAction,
+        });
+
         const points = calculateWinnerPoints(newGameState, user.uid);
-        await updateGameResult(user.uid, true, points, gameState.playerHands[user.uid].length);
+        await updateGameResult(user.uid, true, points, gameState.playerHands[user.uid].length, 0, roomId);
         
         for (const playerId of newGameState.playerOrder) {
           if (playerId !== user.uid) {
-            await updateGameResult(playerId, false, 0, 0);
+            await updateGameResult(playerId, false, 0, 0, 0, roomId);
           }
         }
         
         animateWinCelebration();
         vibrateWin();
         showToast('🎉 You won! 🎉', 'success', 5000);
+
+        setError(null);
+        vibrateCardPlay();
+        return;
       }
       
-      // Update Firestore
+      // Update Firestore (non-winning move)
       const gameStateRef = doc(db, 'gameStates', roomId);
       await updateDoc(gameStateRef, {
         playerHands: newGameState.playerHands,
@@ -304,6 +372,8 @@ export default function GamePage() {
     } catch (err) {
       console.error('Error playing card:', err);
       setError('Failed to play card');
+    } finally {
+      setIsMoveInFlight(false);
     }
   };
 
@@ -322,6 +392,12 @@ export default function GamePage() {
       vibrateError();
       return;
     }
+
+    // FIXED: same in-flight guard — a fast double-tap on the draw pile
+    // shouldn't be able to draw two cards (and advance the turn twice)
+    // before the first draw's Firestore write completes.
+    if (isMoveInFlight) return;
+    setIsMoveInFlight(true);
 
     try {
       const { newState, drawnCards } = drawCardsWithReshuffle(gameState, 1);
@@ -355,6 +431,8 @@ export default function GamePage() {
     } catch (err) {
       console.error('Error drawing card:', err);
       setError('Failed to draw card');
+    } finally {
+      setIsMoveInFlight(false);
     }
   };
 
@@ -669,13 +747,13 @@ export default function GamePage() {
             currentColor={gameState.currentColor}
             direction={gameState.direction}
             onDrawCard={drawCard}
-            isMyTurn={isCurrentPlayer && gameState.status !== 'finished'}
+            isMyTurn={isCurrentPlayer && gameState.status !== 'finished' && !isMoveInFlight}
           />
 
           <div className="flex gap-4 w-full">
             <button
               onClick={drawCard}
-              disabled={!isCurrentPlayer || gameState.status === 'finished'}
+              disabled={!isCurrentPlayer || gameState.status === 'finished' || isMoveInFlight}
               className="flex-1 px-4 py-3 bg-gray-800 hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors"
             >
               🎴 Draw Card
@@ -746,7 +824,7 @@ export default function GamePage() {
         <PlayerHand
           cards={playerHand}
           onCardClick={playCard}
-          isMyTurn={isCurrentPlayer && gameState.status !== 'finished'}
+          isMyTurn={isCurrentPlayer && gameState.status !== 'finished' && !isMoveInFlight}
           topCard={topCard}
           currentColor={gameState.currentColor}
         />
