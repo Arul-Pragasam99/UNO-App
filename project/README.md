@@ -1,4 +1,4 @@
-# 🎮 UNO - Multiplayer Card Game
+# 🎮 UNO - Multiplayer Card Game 
 
 A modern, mobile-first multiplayer UNO game built with **Next.js 14, React 18, TypeScript, Tailwind CSS, GSAP, and Firebase**. Play 1v1 or in rooms with unique game codes. 100% copyright-free original code.
 
