@@ -4,6 +4,7 @@ import { ToastProvider } from '@/lib/toastContext';
 import Toast from '@/components/Toast';
 import './globals.css';
 import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 export const metadata: Metadata = {
   title: 'UNO - Play Together',
