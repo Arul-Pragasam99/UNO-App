@@ -16,6 +16,7 @@ import {
   getPlayableCards,
   applyCardEffect,
   calculateWinnerPoints,
+  getNextPlayerIndex,
 } from '@/lib/gameLogic';
 import { updateGameResult } from '@/lib/statsService';
 import GameBoard from '@/components/GameBoard';
@@ -46,23 +47,14 @@ export default function GamePage() {
   const [loadingMessage, setLoadingMessage] = useState('Loading game...');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [pendingWildCard, setPendingWildCard] = useState<Card | null>(null);
-  // FIXED: in-flight guard against double-tap / double-fire calling playCard,
-  // handleColorSelect, or drawCard twice for the same move before the first
-  // call's Firestore writes (and updateGameResult calls) have completed.
-  // Without this, a fast double-tap on a winning move can double-write
-  // stats for every player in the room even with the rules-side fixes in
-  // place, since those only prevent UNAUTHORIZED writes, not duplicate
-  // legitimate ones from the same authenticated client.
   const [isMoveInFlight, setIsMoveInFlight] = useState(false);
 
-  // Redirect if not logged in
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/');
     }
   }, [user, authLoading, router]);
 
-  // Initialize game on mount
   useEffect(() => {
     if (!roomId || !user || authLoading) return;
 
@@ -125,7 +117,6 @@ export default function GamePage() {
     };
   }, [roomId, user, authLoading]);
 
-  // Subscribe to game state updates
   useEffect(() => {
     if (!roomId || !gameInitialized) return;
 
@@ -136,8 +127,7 @@ export default function GamePage() {
         if (snapshot.exists()) {
           const newState = snapshot.data() as GameState;
           setGameState(newState);
-          
-          // Check for winner
+
           if (newState.status === 'finished' && newState.winner === user?.uid) {
             animateWinCelebration();
             vibrateWin();
@@ -153,45 +143,29 @@ export default function GamePage() {
     return () => unsubscribe();
   }, [roomId, gameInitialized, user?.uid, showToast]);
 
-  // Handle color selection for wild cards
   const handleColorSelect = async (color: 'red' | 'yellow' | 'blue' | 'green') => {
     if (!pendingWildCard || !gameState || !user) return;
-    // FIXED: bail out if a move is already being processed — prevents a
-    // double-tap from queuing two color selections for the same wild card,
-    // which would otherwise double-write gameStates and double-call
-    // updateGameResult for every player when the move is a winning one.
     if (isMoveInFlight) return;
     setIsMoveInFlight(true);
 
     setShowColorPicker(false);
-    
+
     try {
       let newGameState = { ...gameState };
-      
-      // Remove card from hand
+
       newGameState.playerHands = { ...newGameState.playerHands };
       newGameState.playerHands[user.uid] = newGameState.playerHands[user.uid].filter(
         (c) => c.id !== pendingWildCard.id
       );
-      
-      // Add to discard pile
+
       newGameState.discardPile = [...newGameState.discardPile, pendingWildCard];
-      
-      // Apply card effect with chosen color
+
       newGameState = applyCardEffect(newGameState, pendingWildCard, user.uid, color);
-      
-      // Check for winner
+
       if (newGameState.playerHands[user.uid].length === 0) {
         newGameState.status = 'finished';
         newGameState.winner = user.uid;
 
-        // IMPORTANT: write gameStates with status:'finished' to Firestore
-        // BEFORE calling updateGameResult for the other players. The rule
-        // that allows this client to write another player's stats doc
-        // checks gameStates/{roomId}.status == 'finished' at write time —
-        // if that hasn't landed yet, the rule still sees 'playing' and
-        // denies the cross-player write. (Same fix already applied in
-        // playCard — this brings handleColorSelect in line with it.)
         const gameStateRef = doc(db, 'gameStates', roomId);
         await updateDoc(gameStateRef, {
           playerHands: newGameState.playerHands,
@@ -204,12 +178,9 @@ export default function GamePage() {
           lastAction: newGameState.lastAction,
         });
 
-        // Update winner stats
         const points = calculateWinnerPoints(newGameState, user.uid);
         await updateGameResult(user.uid, true, points, gameState.playerHands[user.uid].length, 0, roomId);
 
-        // Update loser stats — gameStates is already 'finished' at this point,
-        // so the cross-player write is permitted by the rule.
         for (const playerId of newGameState.playerOrder) {
           if (playerId !== user.uid) {
             await updateGameResult(playerId, false, 0, 0, 0, roomId);
@@ -221,7 +192,6 @@ export default function GamePage() {
         return;
       }
 
-      // Non-winning move: update Firestore as normal
       const gameStateRef = doc(db, 'gameStates', roomId);
       await updateDoc(gameStateRef, {
         playerHands: newGameState.playerHands,
@@ -233,7 +203,7 @@ export default function GamePage() {
         winner: newGameState.winner,
         lastAction: newGameState.lastAction,
       });
-      
+
       setPendingWildCard(null);
       setError(null);
     } catch (err) {
@@ -268,45 +238,31 @@ export default function GamePage() {
       return;
     }
 
-    // Handle wild cards - need color selection
     if (card.value === 'Wild' || card.value === 'DrawFour') {
       setPendingWildCard(card);
       setShowColorPicker(true);
       return;
     }
 
-    // FIXED: bail out if a move is already being processed — prevents a
-    // fast double-tap on the second confirm-tap (see PlayerHand.tsx) from
-    // calling playCard twice for the same card before the first call's
-    // Firestore writes and updateGameResult calls have completed.
     if (isMoveInFlight) return;
     setIsMoveInFlight(true);
 
     try {
       let newGameState = { ...gameState };
-      
-      // Remove card from hand
+
       newGameState.playerHands = { ...newGameState.playerHands };
       newGameState.playerHands[user.uid] = newGameState.playerHands[user.uid].filter(
         (c) => c.id !== card.id
       );
-      
-      // Add to discard pile
+
       newGameState.discardPile = [...newGameState.discardPile, card];
-      
-      // Apply card effect
+
       newGameState = applyCardEffect(newGameState, card, user.uid);
-      
-      // Check for winner
+
       if (newGameState.playerHands[user.uid].length === 0) {
         newGameState.status = 'finished';
         newGameState.winner = user.uid;
 
-        // IMPORTANT: write the finished game state to Firestore BEFORE
-        // calling updateGameResult for other players. The Firestore rule
-        // that allows this client to update another player's stats doc
-        // checks gameStates/{roomId}.status == 'finished' — if that write
-        // hasn't landed yet, the rule still sees 'playing' and denies it.
         const gameStateRefEarly = doc(db, 'gameStates', roomId);
         await updateDoc(gameStateRefEarly, {
           playerHands: newGameState.playerHands,
@@ -321,13 +277,13 @@ export default function GamePage() {
 
         const points = calculateWinnerPoints(newGameState, user.uid);
         await updateGameResult(user.uid, true, points, gameState.playerHands[user.uid].length, 0, roomId);
-        
+
         for (const playerId of newGameState.playerOrder) {
           if (playerId !== user.uid) {
             await updateGameResult(playerId, false, 0, 0, 0, roomId);
           }
         }
-        
+
         animateWinCelebration();
         vibrateWin();
         showToast('🎉 You won! 🎉', 'success', 5000);
@@ -336,8 +292,7 @@ export default function GamePage() {
         vibrateCardPlay();
         return;
       }
-      
-      // Update Firestore (non-winning move)
+
       const gameStateRef = doc(db, 'gameStates', roomId);
       await updateDoc(gameStateRef, {
         playerHands: newGameState.playerHands,
@@ -349,8 +304,7 @@ export default function GamePage() {
         winner: newGameState.winner,
         lastAction: newGameState.lastAction,
       });
-      
-      // Trigger animations based on card type
+
       vibrateCardPlay();
       if (card.value === 'DrawTwo') {
         vibrateDrawTwo();
@@ -367,7 +321,7 @@ export default function GamePage() {
         animateReverse();
         showToast('Reverse! Direction changed', 'info', 1500);
       }
-      
+
       setError(null);
     } catch (err) {
       console.error('Error playing card:', err);
@@ -393,9 +347,6 @@ export default function GamePage() {
       return;
     }
 
-    // FIXED: same in-flight guard — a fast double-tap on the draw pile
-    // shouldn't be able to draw two cards (and advance the turn twice)
-    // before the first draw's Firestore write completes.
     if (isMoveInFlight) return;
     setIsMoveInFlight(true);
 
@@ -408,25 +359,26 @@ export default function GamePage() {
       }
 
       let newGameState = { ...newState };
-      
-      // Add drawn cards to player's hand
+
       newGameState.playerHands = { ...newGameState.playerHands };
       newGameState.playerHands[user.uid] = [
         ...newGameState.playerHands[user.uid],
         ...drawnCards,
       ];
-      
-      // Move to next player
-      newGameState.currentPlayerIndex = (newGameState.currentPlayerIndex + 1) % newGameState.playerOrder.length;
-      
-      // Update Firestore
+
+      newGameState.currentPlayerIndex = getNextPlayerIndex(
+        newGameState.currentPlayerIndex,
+        newGameState.direction,
+        newGameState.playerOrder.length
+      );
+
       const gameStateRef = doc(db, 'gameStates', roomId);
       await updateDoc(gameStateRef, {
         playerHands: newGameState.playerHands,
         drawPile: newGameState.drawPile,
         currentPlayerIndex: newGameState.currentPlayerIndex,
       });
-      
+
       setError(null);
     } catch (err) {
       console.error('Error drawing card:', err);
@@ -436,11 +388,9 @@ export default function GamePage() {
     }
   };
 
-  // ========== LOADING SCREEN WITH FIXED MESSAGE ==========
   if (authLoading || !gameInitialized || !room || !gameState) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 relative overflow-hidden">
-        {/* Subtle background pattern */}
         <div className="absolute inset-0 opacity-5">
           <div className="absolute inset-0" style={{
             backgroundImage: `radial-gradient(circle at 2px 2px, #333 1px, transparent 1px)`,
@@ -448,7 +398,6 @@ export default function GamePage() {
           }} />
         </div>
 
-        {/* Cancel Button - Top Left */}
         <button
           onClick={() => router.push('/dashboard')}
           className="absolute top-4 left-4 px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl shadow-sm transition-all duration-200 flex items-center gap-2 text-sm font-medium z-20"
@@ -460,7 +409,6 @@ export default function GamePage() {
         </button>
 
         <div className="relative z-10 text-center max-w-md w-full">
-          {/* Bouncing Card Animation with White Glow */}
           <div className="mb-8 flex justify-center">
             <div className="w-28 h-40 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl shadow-lg flex items-center justify-center animate-bounce-card relative">
               <div className="absolute inset-0 rounded-xl bg-white/20 blur-xl"></div>
@@ -468,22 +416,19 @@ export default function GamePage() {
             </div>
           </div>
 
-          {/* Loading Title */}
           <h2 className="text-2xl md:text-3xl font-display font-bold text-gray-800 mb-2">
             {loadingMessage}
           </h2>
 
-          {/* Loading Progress Bar */}
           <div className="mb-6 max-w-xs mx-auto">
             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-gray-700 rounded-full animate-progress"
                 style={{ width: '45%' }}
               />
             </div>
           </div>
 
-          {/* GAME CODE - Large and Shareable */}
           {room && (
             <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-6 shadow-sm">
               <p className="text-gray-500 text-sm mb-2 flex items-center justify-center gap-2">
@@ -509,7 +454,6 @@ export default function GamePage() {
                   </svg>
                 </button>
               </div>
-              {/* ===== FIXED: Correct message for 2-10 players ===== */}
               <p className="text-xs text-gray-400 mt-2">
                 {room.playerOrder.length < 2 ? (
                   `Game will start when ${2 - room.playerOrder.length} more player${2 - room.playerOrder.length !== 1 ? 's' : ''} join`
@@ -520,13 +464,11 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Room Info - Compact */}
           <div className="bg-gray-50 rounded-xl p-3 mb-6">
             <p className="text-gray-500 text-xs mb-1">Room ID</p>
             <p className="text-gray-700 font-mono text-sm break-all">{roomId?.slice(0, 20)}...</p>
           </div>
 
-          {/* Players Count with Avatars */}
           {room && (
             <div className="bg-white border border-gray-100 rounded-xl p-4 mb-6 shadow-sm">
               <div className="flex items-center justify-between mb-3">
@@ -538,14 +480,14 @@ export default function GamePage() {
                   const player = room.players[playerId];
                   const initialName = player?.name?.charAt(0)?.toUpperCase() || '?';
                   const displayName = player?.name?.split(' ')[0] || 'Player';
-                  
+
                   return (
                     <div key={playerId} className="flex flex-col items-center">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
                         {player?.photoURL ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img 
-                            src={player.photoURL} 
+                          <img
+                            src={player.photoURL}
                             alt={player.name}
                             className="w-full h-full object-cover"
                             referrerPolicy="no-referrer"
@@ -577,7 +519,6 @@ export default function GamePage() {
                     </div>
                   );
                 })}
-                {/* Empty slots - waiting players */}
                 {Array.from({ length: Math.max(0, (room?.maxPlayers || 0) - (room?.playerOrder.length || 0)) }).map((_, i) => (
                   <div key={`empty-${i}`} className="flex flex-col items-center opacity-60">
                     <div className="w-12 h-12 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center">
@@ -592,7 +533,6 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Status Message with Icon */}
           <div className="mb-6">
             <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${
               error ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-600'
@@ -613,7 +553,6 @@ export default function GamePage() {
             </div>
           </div>
 
-          {/* Retry Button - Only Shows When Error Occurs */}
           {error && (
             <div className="flex gap-3 mt-4">
               <button
@@ -628,7 +567,6 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Tip */}
           {!error && (
             <p className="text-gray-400 text-xs mt-6 italic">
               Share the game code with your friends to start playing
@@ -636,7 +574,6 @@ export default function GamePage() {
           )}
         </div>
 
-        {/* CSS Animations */}
         <style jsx>{`
           @keyframes bounce-card {
             0%, 100% { transform: translateY(0px) scale(1); }
@@ -645,7 +582,7 @@ export default function GamePage() {
           .animate-bounce-card {
             animation: bounce-card 1.5s ease-in-out infinite;
           }
-          
+
           @keyframes progress {
             0% { width: 10%; }
             50% { width: 70%; }
@@ -659,23 +596,19 @@ export default function GamePage() {
     );
   }
 
-  // ========== ACTUAL GAME UI ==========
   const currentPlayerId = getCurrentPlayerId(gameState);
   const isCurrentPlayer = user?.uid === currentPlayerId;
   const playerHand = getPlayerHand(gameState, user!.uid);
-  const opponentId = gameState.playerOrder.find((id) => id !== user?.uid);
-  const opponentPlayer = opponentId ? room.players[opponentId] : null;
+  const otherPlayerIds = gameState.playerOrder.filter((id) => id !== user?.uid);
   const topCard = gameState.discardPile[gameState.discardPile.length - 1];
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
-      {/* Color Picker Modal */}
       <ColorPicker
         isOpen={showColorPicker}
         onColorSelect={handleColorSelect}
       />
 
-      {/* Header */}
       <div className="max-w-6xl mx-auto mb-4 flex justify-between items-center">
         <button
           onClick={() => router.push('/dashboard')}
@@ -694,52 +627,62 @@ export default function GamePage() {
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-100px)]">
-        {/* Opponent Info - WITH AVATAR */}
-        <div className="lg:col-span-1 bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-          <div className="text-center mb-4">
-            {/* Opponent Avatar */}
-            <div className="flex justify-center mb-3">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden border-2 border-white shadow-md">
-                {opponentPlayer?.photoURL ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img 
-                    src={opponentPlayer.photoURL} 
-                    alt={opponentPlayer.name}
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                      const parent = (e.target as HTMLImageElement).parentElement;
-                      if (parent) {
-                        const span = document.createElement('span');
-                        span.className = 'text-gray-600 font-bold text-2xl';
-                        span.textContent = opponentPlayer?.name?.charAt(0)?.toUpperCase() || '?';
-                        parent.appendChild(span);
-                      }
-                    }}
-                  />
-                ) : (
-                  <span className="text-gray-600 font-bold text-2xl">
-                    {opponentPlayer?.name?.charAt(0)?.toUpperCase() || '?'}
-                  </span>
-                )}
-              </div>
-            </div>
-            <p className="text-gray-500 text-sm">Opponent</p>
-            <p className="text-gray-800 font-bold">{opponentPlayer?.name || 'Waiting...'}</p>
+        <div className="lg:col-span-1 bg-white rounded-2xl p-4 border border-gray-200 shadow-sm overflow-y-auto">
+          <p className="text-gray-500 text-sm font-medium mb-3 text-center">
+            {otherPlayerIds.length === 1 ? 'Opponent' : `Other Players (${otherPlayerIds.length})`}
+          </p>
+          <div className="flex flex-col gap-3">
+            {otherPlayerIds.map((id) => {
+              const p = room.players[id];
+              const handCount = getPlayerHand(gameState, id).length;
+              const isTheirTurn = currentPlayerId === id;
+              const initial = p?.name?.charAt(0)?.toUpperCase() || '?';
+
+              return (
+                <div
+                  key={id}
+                  className={`flex items-center gap-3 rounded-xl p-3 border ${
+                    isTheirTurn ? 'border-gray-400 bg-gray-50' : 'border-gray-100 bg-white'
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm flex-shrink-0">
+                    {p?.photoURL ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.photoURL}
+                        alt={p.name}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          const parent = (e.target as HTMLImageElement).parentElement;
+                          if (parent) {
+                            const span = document.createElement('span');
+                            span.className = 'text-gray-600 font-bold text-sm';
+                            span.textContent = initial;
+                            parent.appendChild(span);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <span className="text-gray-600 font-bold text-sm">{initial}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-800 font-semibold text-sm truncate">{p?.name || 'Player'}</p>
+                    <p className="text-gray-500 text-xs">🃏 {handCount} card{handCount !== 1 ? 's' : ''}</p>
+                  </div>
+                  {isTheirTurn && (
+                    <span className="text-[10px] bg-gray-700 text-white px-2 py-0.5 rounded-full flex-shrink-0 animate-pulse">
+                      Turn
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <div className="bg-gray-50 rounded-lg p-4 text-center">
-            <p className="text-gray-500 text-sm mb-2">Cards in Hand</p>
-            <p className="text-3xl font-bold text-gray-800">{opponentId ? getPlayerHand(gameState, opponentId).length : 0}</p>
-          </div>
-          {currentPlayerId === opponentId && (
-            <div className="mt-4 animate-pulse">
-              <p className="text-gray-600 text-center font-bold">Their Turn</p>
-            </div>
-          )}
         </div>
 
-        {/* Game Board */}
         <div className="lg:col-span-2 flex flex-col items-center justify-center gap-4">
           <GameBoard
             topCard={topCard}
@@ -761,16 +704,14 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* Player Info - WITH AVATAR */}
         <div className="lg:col-span-1 bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
           <div className="text-center mb-4">
-            {/* Your Avatar */}
             <div className="flex justify-center mb-3">
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden border-2 border-white shadow-md">
                 {playerData?.photoURL ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img 
-                    src={playerData.photoURL} 
+                  <img
+                    src={playerData.photoURL}
                     alt={playerData.name}
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
@@ -812,14 +753,12 @@ export default function GamePage() {
         </div>
       </div>
 
-      {/* Error Message */}
       {error && (
         <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto bg-red-500 text-white p-3 rounded-lg text-sm z-50 shadow-lg">
           {error}
         </div>
       )}
 
-      {/* Player Hand */}
       <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-4 pb-4 border-t border-gray-200">
         <PlayerHand
           cards={playerHand}
