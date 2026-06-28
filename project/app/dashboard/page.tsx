@@ -6,7 +6,7 @@ import gsap from 'gsap';
 import { useAuth } from '@/lib/authContext';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, getDoc, deleteDoc, Timestamp } from 'firebase/firestore';
 import { generateGameCode } from '@/lib/gameLogic';
 import { GameRoom, Player } from '@/lib/types';
 
@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const [gameCode, setGameCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [isCreatingGame, setIsCreatingGame] = useState(false);
+  const [isJoiningGame, setIsJoiningGame] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
   const [currentRoomId, setCurrentRoomId] = useState<string>('');
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -162,6 +163,7 @@ export default function DashboardPage() {
 
   const joinGame = async () => {
     if (!user || !playerData || !joinCode) return;
+    setIsJoiningGame(true);
     try {
       const q = query(collection(db, 'gameRooms'), where('gameCode', '==', joinCode.toUpperCase()));
       const querySnapshot = await getDocs(q);
@@ -174,9 +176,25 @@ export default function DashboardPage() {
       const roomDoc = querySnapshot.docs[0];
       const roomData = roomDoc.data() as GameRoom;
 
-      if (roomData.expiresAt && new Date(roomData.expiresAt) < new Date()) {
+      // FIXED: expiresAt comes back from Firestore as a Timestamp, not a
+      // Date or ISO string. `new Date(timestampObject)` silently produces
+      // an Invalid Date, which always compares as false against `new Date()`
+      // — so this check never actually fired before. Using `.toDate()`
+      // (with a fallback for the rare case it's already a Date, e.g. if a
+      // local/offline cache returns it differently) makes the comparison real.
+      const expiresAtDate =
+        roomData.expiresAt instanceof Timestamp
+          ? roomData.expiresAt.toDate()
+          : roomData.expiresAt
+          ? new Date(roomData.expiresAt as any)
+          : null;
+
+      if (expiresAtDate && expiresAtDate < new Date()) {
         alert('Game code has expired. Please ask the host to create a new game.');
-        await deleteDoc(doc(db, 'gameRooms', roomDoc.id));
+        await deleteDoc(doc(db, 'gameRooms', roomDoc.id)).catch(() => {
+          // Deleting an already-expired room can itself be denied by rules
+          // if this user isn't the creator — that's fine, it's just cleanup.
+        });
         return;
       }
 
@@ -211,9 +229,27 @@ export default function DashboardPage() {
       }
 
       router.push(`/game/${roomDoc.id}`);
-    } catch (error) {
+    } catch (error: any) {
+      // FIXED: surface the real Firebase error code instead of a generic
+      // "Failed to join game" alert. permission-denied (rules rejected the
+      // write) looks completely different to a player than a network error
+      // or anything else — this makes the real cause visible immediately
+      // instead of requiring a console check every time.
       console.error('Error joining game:', error);
-      alert('Failed to join game');
+      const code = error?.code || 'unknown';
+      if (code === 'permission-denied') {
+        alert(
+          'Could not join: permission denied by Firestore rules. ' +
+          'This usually means the room is full, already started, or the ' +
+          'security rules rejected this update — check the console for details.'
+        );
+      } else if (code === 'unavailable' || code === 'network-request-failed') {
+        alert('Could not join: network error. Check your connection and try again.');
+      } else {
+        alert(`Failed to join game (${code}). Check the console for details.`);
+      }
+    } finally {
+      setIsJoiningGame(false);
     }
   };
 
@@ -346,9 +382,10 @@ export default function DashboardPage() {
             />
             <button
               onClick={joinGame}
-              className="px-6 py-3 bg-gray-800 text-white font-bold rounded-xl hover:bg-gray-900 transition-colors"
+              disabled={isJoiningGame}
+              className="px-6 py-3 bg-gray-800 text-white font-bold rounded-xl hover:bg-gray-900 transition-colors disabled:opacity-50"
             >
-              Join
+              {isJoiningGame ? 'Joining...' : 'Join'}
             </button>
           </div>
         </div>
