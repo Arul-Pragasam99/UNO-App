@@ -24,14 +24,13 @@ const GameBoard = ({
   isMyTurn = false,
 }: GameBoardProps) => {
   const discardRef = useRef<HTMLDivElement>(null);
-  const drawRef = useRef<HTMLButtonElement>(null); // ✅ Fixed: changed from HTMLDivElement to HTMLButtonElement
   const directionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (discardRef.current) {
       gsap.fromTo(
         discardRef.current,
-        { scale: 0.8, rotateZ: gsap.utils.random(-10, 10) },
+        { scale: 0.9, rotateZ: 0 },
         { scale: 1, rotateZ: 0, duration: 0.3, ease: 'back.out(1.5)' }
       );
     }
@@ -41,7 +40,7 @@ const GameBoard = ({
     if (directionRef.current) {
       gsap.to(directionRef.current, {
         rotateZ: direction === 1 ? 0 : 180,
-        duration: 0.5,
+        duration: 0.4,
         ease: 'back.out(2)',
       });
     }
@@ -55,43 +54,38 @@ const GameBoard = ({
   };
 
   return (
-    <div className="w-full max-w-lg mx-auto">
-      {/* Direction indicator */}
-      <div className="flex justify-center mb-3 sm:mb-4">
+    <div className="w-full max-w-sm sm:max-w-md mx-auto">
+      {/* Direction & Color - Compact */}
+      <div className="flex items-center justify-center gap-2 sm:gap-4 mb-3">
         <div
           ref={directionRef}
-          className="flex items-center gap-2 bg-white/10 backdrop-blur rounded-full px-4 py-1.5 border border-white/20"
+          className="flex items-center gap-1 sm:gap-2 bg-white/80 backdrop-blur rounded-full px-3 sm:px-4 py-1 border border-gray-200 shadow-sm"
         >
-          <span className="text-white/70 text-xs sm:text-sm font-medium">
-            {direction === 1 ? '→ Clockwise' : '← Counter-clockwise'}
+          <span className="text-gray-600 text-[10px] sm:text-xs font-medium">
+            {direction === 1 ? '→' : '←'}
           </span>
-          <span className="text-lg">🔄</span>
+          <span className="text-gray-400 text-[8px] sm:text-[10px]">🔄</span>
         </div>
-      </div>
 
-      {/* Current color indicator */}
-      <div className="flex justify-center mb-3 sm:mb-4">
-        <div className="flex items-center gap-2 bg-black/30 backdrop-blur rounded-full px-4 py-2 border border-white/10">
-          <span className="text-white/70 text-xs sm:text-sm">Current Color:</span>
+        <div className="flex items-center gap-1 sm:gap-2 bg-white/80 backdrop-blur rounded-full px-3 sm:px-4 py-1 border border-gray-200 shadow-sm">
           <div
-            className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-white/50 transition-colors duration-300"
+            className="w-3 h-3 sm:w-4 sm:h-4 rounded-full border border-gray-300 transition-colors"
             style={{
               backgroundColor: colorIndicatorMap[currentColor] || '#888',
-              boxShadow: `0 0 12px ${colorIndicatorMap[currentColor] || '#888'}`,
+              boxShadow: `0 0 8px ${colorIndicatorMap[currentColor] || '#888'}40`,
             }}
           />
-          <span className="text-white font-semibold text-xs sm:text-sm capitalize">{currentColor}</span>
+          <span className="text-gray-600 text-[10px] sm:text-xs font-medium capitalize">{currentColor}</span>
         </div>
       </div>
 
       {/* Card piles */}
-      <div className="grid grid-cols-2 gap-6 sm:gap-10 px-4">
+      <div className="flex items-center justify-center gap-4 sm:gap-8">
         {/* Discard Pile */}
         <div className="flex flex-col items-center">
-          <p className="text-white/60 text-xs sm:text-sm mb-2 font-medium">Discard Pile</p>
-          <div ref={discardRef} id="discard-pile" className="relative">
-            {/* Shadow cards underneath */}
-            <div className="absolute inset-0 translate-x-1 translate-y-1 opacity-30">
+          <p className="text-gray-400 text-[8px] sm:text-xs mb-1 font-medium">Discard</p>
+          <div ref={discardRef} className="relative">
+            <div className="absolute inset-0 translate-x-0.5 translate-y-0.5 opacity-30">
               <GameCard card={topCard} size="lg" animate={false} />
             </div>
             <GameCard card={topCard} size="lg" animate={false} />
@@ -100,25 +94,21 @@ const GameBoard = ({
 
         {/* Draw Pile */}
         <div className="flex flex-col items-center">
-          <p className="text-white/60 text-xs sm:text-sm mb-2 font-medium">Draw Pile</p>
+          <p className="text-gray-400 text-[8px] sm:text-xs mb-1 font-medium">Draw</p>
           <button
-            ref={drawRef}
             onClick={onDrawCard}
             disabled={!isMyTurn}
-            className={`
-              relative group
-              ${isMyTurn ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed opacity-60'}
-              transition-transform duration-200
-            `}
+            className={`relative group transition-transform duration-200 ${
+              isMyTurn ? 'active:scale-95' : 'opacity-50 cursor-not-allowed'
+            }`}
           >
-            {/* Stacked card effect */}
             <div className="relative">
               {[2, 1, 0].map((i) => (
                 <div
                   key={i}
                   className="absolute inset-0"
                   style={{
-                    transform: `translateX(${i * 2}px) translateY(${i * 2}px)`,
+                    transform: `translateX(${i * 1.5}px) translateY(${i * 1.5}px)`,
                     zIndex: 3 - i,
                     opacity: i === 0 ? 1 : 0.7 - i * 0.2,
                   }}
@@ -131,15 +121,13 @@ const GameBoard = ({
               </div>
             </div>
 
-            {/* Draw count badge */}
-            <div className="absolute -top-2 -right-2 z-20 bg-indigo-600 text-white text-xs font-bold rounded-full w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center border-2 border-white/30 shadow-lg">
+            <div className="absolute -top-1 -right-1 z-20 bg-gray-700 text-white text-[10px] font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center border border-white shadow-sm">
               {drawPileSize}
             </div>
 
-            {/* Tap to draw hint */}
             {isMyTurn && (
-              <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap">
-                <span className="text-yellow-300/80 text-[10px] sm:text-xs font-medium animate-pulse">
+              <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                <span className="text-gray-500 text-[8px] sm:text-[10px] font-medium animate-pulse">
                   Tap to draw
                 </span>
               </div>

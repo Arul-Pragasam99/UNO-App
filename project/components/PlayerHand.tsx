@@ -26,20 +26,22 @@ const PlayerHand = ({
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
 
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && cards.length > 0) {
       const cardElements = containerRef.current.querySelectorAll('[data-card-id]');
-      gsap.fromTo(
-        cardElements,
-        { opacity: 0, y: 30, scale: 0.8 },
-        {
-          opacity: 1,
-          y: 0,
-          scale: 1,
-          stagger: { each: 0.04, from: 'center' },
-          duration: 0.4,
-          ease: 'back.out(1.2)',
-        }
-      );
+      if (cardElements.length > 0) {
+        gsap.fromTo(
+          cardElements,
+          { opacity: 0, y: 20, scale: 0.9 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            stagger: { each: 0.03, from: 'center' },
+            duration: 0.4,
+            ease: 'back.out(1.2)',
+          }
+        );
+      }
     }
   }, [cards.length]);
 
@@ -54,12 +56,10 @@ const PlayerHand = ({
     }
 
     if (selectedCard === card.id) {
-      // Double-tap to play
       vibrateCardPlay();
       setSelectedCard(null);
       onCardClick(card);
     } else {
-      // First tap to select
       setSelectedCard(card.id);
     }
   };
@@ -68,53 +68,59 @@ const PlayerHand = ({
     return canPlayCard(card, topCard, currentColor);
   };
 
+  if (cards.length === 0) {
+    return (
+      <div className="w-full text-center py-2">
+        <p className="text-gray-400 text-sm">No cards left!</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full">
-      {/* Turn indicator */}
-      <div className="text-center mb-2 sm:mb-3">
-        <p className={`text-xs sm:text-sm font-semibold ${isMyTurn ? 'text-yellow-300' : 'text-white/50'}`}>
-          {isMyTurn ? '✨ Your Turn — Tap a card, then tap again to play' : '⏳ Waiting for opponent...'}
+    <div className="w-full px-1 sm:px-4">
+      {/* Turn indicator - Compact */}
+      <div className="text-center mb-1 sm:mb-2">
+        <p className={`text-[10px] sm:text-xs font-semibold ${isMyTurn ? 'text-gray-700' : 'text-gray-400'}`}>
+          {isMyTurn ? '✨ Tap card to select, tap again to play' : '⏳ Waiting for opponent...'}
         </p>
       </div>
 
-      {/* Card hand — horizontally scrollable on mobile, centered on desktop */}
+      {/* Cards */}
       <div
         ref={containerRef}
-        className="
-          flex items-end gap-1 sm:gap-1.5 md:gap-2
-          overflow-x-auto overflow-y-visible
-          pb-2 px-2 sm:px-4
-          scroll-smooth snap-x snap-mandatory
-          justify-start sm:justify-center
-          -mx-2 sm:mx-0
-          scrollbar-hide
-        "
+        className="flex items-end gap-0.5 sm:gap-1 md:gap-1.5 overflow-x-auto overflow-y-visible pb-1 px-1 sm:px-2 scroll-smooth snap-x snap-mandatory justify-start sm:justify-center scrollbar-hide"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {cards.map((card) => {
           const playable = isCardPlayable(card);
+          const isSelected = selectedCard === card.id;
+          
           return (
             <div
               key={card.id}
               className="flex-shrink-0 snap-center"
+              style={{
+                transform: isSelected ? 'translateY(-8px)' : 'none',
+                transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              }}
             >
               <GameCard
                 card={card}
                 onClick={() => handleCardClick(card)}
                 isSelectable={isMyTurn}
-                isSelected={selectedCard === card.id}
+                isSelected={isSelected}
                 isPlayable={playable}
-                size={cards.length > 10 ? 'xs' : cards.length > 6 ? 'sm' : 'md'}
+                size={cards.length > 12 ? 'xs' : cards.length > 8 ? 'sm' : 'md'}
               />
             </div>
           );
         })}
       </div>
 
-      {/* Card count badge */}
-      <div className="text-center mt-1">
-        <span className="inline-flex items-center gap-1 text-white/60 text-xs bg-white/10 rounded-full px-3 py-0.5">
-          🃏 {cards.length} card{cards.length !== 1 ? 's' : ''}
+      {/* Card count */}
+      <div className="text-center mt-0.5">
+        <span className="text-gray-400 text-[8px] sm:text-[10px] bg-white/50 px-2 py-0.5 rounded-full">
+          🃏 {cards.length}
         </span>
       </div>
     </div>

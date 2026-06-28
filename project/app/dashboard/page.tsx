@@ -56,8 +56,8 @@ export default function DashboardPage() {
     if (!loading && containerRef.current) {
       gsap.fromTo(
         containerRef.current,
-        { opacity: 0, y: 30 },
-        { opacity: 1, y: 0, duration: 0.8, ease: 'power2.out' }
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' }
       );
     }
   }, [loading]);
@@ -87,7 +87,6 @@ export default function DashboardPage() {
           const roomRef = doc(db, 'gameRooms', roomId);
           deleteDoc(roomRef).catch(console.error);
           setShowModal(false);
-          alert(`Game code ${code} has expired after 1 minute. Please create a new game.`);
           return 0;
         }
         return prev - 1;
@@ -176,12 +175,6 @@ export default function DashboardPage() {
       const roomDoc = querySnapshot.docs[0];
       const roomData = roomDoc.data() as GameRoom;
 
-      // FIXED: expiresAt comes back from Firestore as a Timestamp, not a
-      // Date or ISO string. `new Date(timestampObject)` silently produces
-      // an Invalid Date, which always compares as false against `new Date()`
-      // — so this check never actually fired before. Using `.toDate()`
-      // (with a fallback for the rare case it's already a Date, e.g. if a
-      // local/offline cache returns it differently) makes the comparison real.
       const expiresAtDate =
         roomData.expiresAt instanceof Timestamp
           ? roomData.expiresAt.toDate()
@@ -191,10 +184,7 @@ export default function DashboardPage() {
 
       if (expiresAtDate && expiresAtDate < new Date()) {
         alert('Game code has expired. Please ask the host to create a new game.');
-        await deleteDoc(doc(db, 'gameRooms', roomDoc.id)).catch(() => {
-          // Deleting an already-expired room can itself be denied by rules
-          // if this user isn't the creator — that's fine, it's just cleanup.
-        });
+        await deleteDoc(doc(db, 'gameRooms', roomDoc.id)).catch(() => {});
         return;
       }
 
@@ -230,23 +220,14 @@ export default function DashboardPage() {
 
       router.push(`/game/${roomDoc.id}`);
     } catch (error: any) {
-      // FIXED: surface the real Firebase error code instead of a generic
-      // "Failed to join game" alert. permission-denied (rules rejected the
-      // write) looks completely different to a player than a network error
-      // or anything else — this makes the real cause visible immediately
-      // instead of requiring a console check every time.
       console.error('Error joining game:', error);
       const code = error?.code || 'unknown';
       if (code === 'permission-denied') {
-        alert(
-          'Could not join: permission denied by Firestore rules. ' +
-          'This usually means the room is full, already started, or the ' +
-          'security rules rejected this update — check the console for details.'
-        );
+        alert('Could not join: permission denied. The room may be full or already started.');
       } else if (code === 'unavailable' || code === 'network-request-failed') {
-        alert('Could not join: network error. Check your connection and try again.');
+        alert('Network error. Check your connection and try again.');
       } else {
-        alert(`Failed to join game (${code}). Check the console for details.`);
+        alert('Failed to join game. Please try again.');
       }
     } finally {
       setIsJoiningGame(false);
@@ -268,9 +249,7 @@ export default function DashboardPage() {
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="animate-spin">
-          <div className="w-16 h-16 border-4 border-gray-300 border-t-gray-600 rounded-full"></div>
-        </div>
+        <div className="w-12 h-12 border-4 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
       </div>
     );
   }
@@ -282,35 +261,32 @@ export default function DashboardPage() {
   };
 
   return (
-    <div
-      ref={containerRef}
-      className="min-h-screen bg-gray-100 pb-20"
-    >
-      {/* Header - Dark Grey */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="text-3xl font-display font-bold">
+    <div ref={containerRef} className="min-h-screen bg-gray-100 pb-20">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10 safe-top">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="text-2xl sm:text-3xl font-display font-bold">
             <span className="text-gray-800">U</span>
             <span className="text-gray-700">N</span>
             <span className="text-gray-600">O</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             {playerData?.photoURL && (
               <Image
                 src={playerData.photoURL}
                 alt={playerData.name}
-                width={40}
-                height={40}
+                width={36}
+                height={36}
                 className="rounded-full border-2 border-gray-300"
               />
             )}
-            <div className="hidden md:block">
-              <p className="font-semibold text-gray-800">{playerData?.name}</p>
-              <p className="text-sm text-gray-500">{playerData?.email}</p>
+            <div className="hidden sm:block">
+              <p className="font-semibold text-gray-800 text-sm">{playerData?.name}</p>
+              <p className="text-xs text-gray-500">{playerData?.email}</p>
             </div>
             <button
               onClick={logout}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-lg transition-colors"
+              className="px-3 sm:px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white text-sm rounded-lg transition-colors min-h-[40px]"
             >
               Logout
             </button>
@@ -318,72 +294,70 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Stats Cards - Grey Theme */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-            <p className="text-gray-500 text-sm mb-2">Total Games</p>
-            <p className="text-4xl font-bold text-gray-800">{stats.totalGames}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-            <p className="text-gray-500 text-sm mb-2">Wins</p>
-            <p className="text-4xl font-bold text-green-600">{stats.wins}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-            <p className="text-gray-500 text-sm mb-2">Losses</p>
-            <p className="text-4xl font-bold text-red-500">{stats.losses}</p>
-          </div>
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* Stats - Responsive Grid */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+          {[
+            { label: 'Games', value: stats.totalGames, color: 'text-gray-800' },
+            { label: 'Wins', value: stats.wins, color: 'text-green-600' },
+            { label: 'Losses', value: stats.losses, color: 'text-red-500' },
+          ].map((stat, i) => (
+            <div key={i} className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200 shadow-sm text-center">
+              <p className="text-gray-500 text-xs sm:text-sm">{stat.label}</p>
+              <p className={`text-2xl sm:text-4xl font-bold ${stat.color}`}>{stat.value}</p>
+            </div>
+          ))}
         </div>
 
-        {/* Game Mode Selection - Grey Theme */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Game Modes */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6">
           <div
-            className="group bg-gradient-to-br from-gray-700 to-gray-800 rounded-3xl p-8 cursor-pointer hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+            className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-2xl sm:rounded-3xl p-6 sm:p-8 cursor-pointer hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
             onClick={createOneVsOneGame}
           >
-            <div className="text-5xl mb-4">⚔️</div>
-            <h2 className="text-3xl font-display font-bold text-white mb-2">1v1 Battle</h2>
-            <p className="text-gray-300 mb-4">Challenge your friend to an epic one-on-one match</p>
+            <div className="text-4xl sm:text-5xl mb-3">⚔️</div>
+            <h2 className="text-xl sm:text-3xl font-display font-bold text-white">1v1 Battle</h2>
+            <p className="text-gray-300 text-sm sm:text-base mt-1 mb-4">Challenge a friend</p>
             <button
               disabled={isCreatingGame}
-              className="w-full bg-white text-gray-800 font-bold py-3 rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
+              className="w-full bg-white text-gray-800 font-bold py-2.5 sm:py-3 rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50 text-sm sm:text-base"
             >
               {isCreatingGame ? 'Creating...' : 'Create Game'}
             </button>
           </div>
 
           <div
-            className="group bg-gradient-to-br from-gray-600 to-gray-700 rounded-3xl p-8 cursor-pointer hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+            className="bg-gradient-to-br from-gray-600 to-gray-700 rounded-2xl sm:rounded-3xl p-6 sm:p-8 cursor-pointer hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
             onClick={createRoomGame}
           >
-            <div className="text-5xl mb-4">👥</div>
-            <h2 className="text-3xl font-display font-bold text-white mb-2">Room Game</h2>
-            <p className="text-gray-300 mb-4">Create a room and invite up to 10 friends</p>
+            <div className="text-4xl sm:text-5xl mb-3">👥</div>
+            <h2 className="text-xl sm:text-3xl font-display font-bold text-white">Room Game</h2>
+            <p className="text-gray-300 text-sm sm:text-base mt-1 mb-4">Invite up to 10 players</p>
             <button
               disabled={isCreatingGame}
-              className="w-full bg-white text-gray-800 font-bold py-3 rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
+              className="w-full bg-white text-gray-800 font-bold py-2.5 sm:py-3 rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50 text-sm sm:text-base"
             >
               {isCreatingGame ? 'Creating...' : 'Create Room'}
             </button>
           </div>
         </div>
 
-        {/* Join Game - Grey Theme */}
-        <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm">
-          <h3 className="text-2xl font-display font-bold text-gray-800 mb-4">Join a Game</h3>
-          <div className="flex gap-2">
+        {/* Join Game */}
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 border border-gray-200 shadow-sm">
+          <h3 className="text-xl sm:text-2xl font-display font-bold text-gray-800 mb-4">Join a Game</h3>
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
               placeholder="Enter game code"
-              className="flex-1 px-4 py-3 rounded-xl bg-gray-50 text-gray-800 placeholder-gray-400 border border-gray-200 focus:outline-none focus:border-gray-400"
+              className="flex-1 px-4 py-3 rounded-xl bg-gray-50 text-gray-800 placeholder-gray-400 border border-gray-200 focus:outline-none focus:border-gray-400 text-sm sm:text-base"
+              maxLength={6}
             />
             <button
               onClick={joinGame}
-              disabled={isJoiningGame}
-              className="px-6 py-3 bg-gray-800 text-white font-bold rounded-xl hover:bg-gray-900 transition-colors disabled:opacity-50"
+              disabled={isJoiningGame || !joinCode}
+              className="px-6 py-3 bg-gray-800 text-white font-bold rounded-xl hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base min-h-[48px]"
             >
               {isJoiningGame ? 'Joining...' : 'Join'}
             </button>
@@ -391,22 +365,22 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Modal - Grey Theme */}
+      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl">
-            <h2 className="text-2xl font-display font-bold text-gray-800 mb-4">Game Created!</h2>
-            <p className="text-gray-600 mb-6">Share this code with your friends:</p>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl mx-4">
+            <h2 className="text-xl sm:text-2xl font-display font-bold text-gray-800 mb-3">Game Created!</h2>
+            <p className="text-gray-600 text-sm sm:text-base mb-4">Share this code:</p>
 
-            <div className="bg-gradient-to-r from-gray-200 to-gray-300 rounded-2xl p-6 mb-6 text-center">
-              <p className="text-4xl font-display font-bold text-gray-800 tracking-widest">
+            <div className="bg-gradient-to-r from-gray-200 to-gray-300 rounded-2xl p-4 sm:p-6 mb-4 text-center">
+              <p className="text-3xl sm:text-4xl font-mono font-bold text-gray-800 tracking-widest">
                 {gameCode}
               </p>
             </div>
 
-            <div className="text-center mb-6">
-              <p className="text-sm text-gray-500 mb-1">Code expires in:</p>
-              <p className={`text-3xl font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-gray-700'}`}>
+            <div className="text-center mb-4">
+              <p className="text-gray-500 text-sm">Code expires in:</p>
+              <p className={`text-2xl sm:text-3xl font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-gray-700'}`}>
                 {formatTime(timeLeft)}
               </p>
               {timeLeft <= 10 && (
@@ -416,14 +390,14 @@ export default function DashboardPage() {
 
             <button
               onClick={() => copyGameCode(gameCode)}
-              className="w-full mb-4 px-4 py-3 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-xl transition-colors"
+              className="w-full mb-3 px-4 py-3 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-xl transition-colors text-sm sm:text-base min-h-[48px]"
             >
               Copy Code
             </button>
 
             <button
               onClick={closeModal}
-              className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-colors"
+              className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-colors text-sm sm:text-base min-h-[48px]"
             >
               Done
             </button>
