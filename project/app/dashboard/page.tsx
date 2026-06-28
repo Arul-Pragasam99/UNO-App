@@ -20,7 +20,7 @@ export default function DashboardPage() {
   const [joinCode, setJoinCode] = useState('');
   const [isCreatingGame, setIsCreatingGame] = useState(false);
   const [isJoiningGame, setIsJoiningGame] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(120); // ← CHANGED: 120 seconds (2 minutes)
   const [currentRoomId, setCurrentRoomId] = useState<string>('');
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -71,7 +71,7 @@ export default function DashboardPage() {
   }, []);
 
   const startCountdown = (roomId: string, code: string) => {
-    setTimeLeft(60);
+    setTimeLeft(120); // ← CHANGED: 120 seconds (2 minutes)
     setCurrentRoomId(roomId);
 
     if (countdownIntervalRef.current) {
@@ -100,7 +100,7 @@ export default function DashboardPage() {
     try {
       const code = generateGameCode();
       const expiryTime = new Date();
-      expiryTime.setMinutes(expiryTime.getMinutes() + 1);
+      expiryTime.setMinutes(expiryTime.getMinutes() + 2); // ← CHANGED: 2 minutes
 
       const roomId = user.uid + '_' + Date.now();
       const room: GameRoom = {
@@ -133,7 +133,7 @@ export default function DashboardPage() {
     try {
       const code = generateGameCode();
       const expiryTime = new Date();
-      expiryTime.setMinutes(expiryTime.getMinutes() + 1);
+      expiryTime.setMinutes(expiryTime.getMinutes() + 2); // ← CHANGED: 2 minutes
 
       const roomId = user.uid + '_room_' + Date.now();
       const room: GameRoom = {
@@ -295,7 +295,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Stats - Responsive Grid */}
+        {/* Stats */}
         <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
           {[
             { label: 'Games', value: stats.totalGames, color: 'text-gray-800' },
@@ -380,10 +380,10 @@ export default function DashboardPage() {
 
             <div className="text-center mb-4">
               <p className="text-gray-500 text-sm">Code expires in:</p>
-              <p className={`text-2xl sm:text-3xl font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-gray-700'}`}>
+              <p className={`text-2xl sm:text-3xl font-bold ${timeLeft <= 20 ? 'text-red-500 animate-pulse' : 'text-gray-700'}`}>
                 {formatTime(timeLeft)}
               </p>
-              {timeLeft <= 10 && (
+              {timeLeft <= 20 && (
                 <p className="text-xs text-red-500 mt-1">⚠️ Expiring soon!</p>
               )}
             </div>
