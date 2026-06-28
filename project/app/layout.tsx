@@ -3,6 +3,7 @@ import { AuthProvider } from '@/lib/authContext';
 import { ToastProvider } from '@/lib/toastContext';
 import Toast from '@/components/Toast';
 import './globals.css';
+import { Analytics } from "@vercel/analytics/next"
 
 export const metadata: Metadata = {
   title: 'UNO - Play Together',
