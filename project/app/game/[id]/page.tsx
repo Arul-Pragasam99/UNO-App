@@ -49,6 +49,7 @@ export default function GamePage() {
   const [pendingWildCard, setPendingWildCard] = useState<Card | null>(null);
   const [isMoveInFlight, setIsMoveInFlight] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
   const handContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,7 +84,9 @@ export default function GamePage() {
         const gameStateSnap = await getDoc(gameStateRef);
 
         if (!gameStateSnap.exists()) {
-          if (roomData.playerOrder.length >= 2) {
+          // Check if room is ready to start (only for 1v1 auto-start)
+          // For room games, we wait for host to click "Start Game"
+          if (roomData.gameType === 'oneVsOne' && roomData.playerOrder.length >= 2) {
             setLoadingMessage('Initializing game...');
             const newGameState = initializeGameState(roomId, roomData.playerOrder);
             await setDoc(gameStateRef, newGameState);
@@ -94,8 +97,18 @@ export default function GamePage() {
             }
 
             await updateDoc(roomRef, { status: 'playing' });
+          } else if (roomData.gameType === 'room' && roomData.status === 'playing') {
+            // Host has started the game
+            setLoadingMessage('Starting game...');
+            const newGameState = initializeGameState(roomId, roomData.playerOrder);
+            await setDoc(gameStateRef, newGameState);
+
+            if (isMounted) {
+              setGameState(newGameState);
+              setGameInitialized(true);
+            }
           } else {
-            setLoadingMessage('Waiting for players to join...');
+            setLoadingMessage(roomData.gameType === 'room' ? 'Waiting for host to start...' : 'Waiting for players to join...');
             setError(null);
           }
         } else {
@@ -119,6 +132,7 @@ export default function GamePage() {
     };
   }, [roomId, user, authLoading]);
 
+  // Subscribe to game state updates
   useEffect(() => {
     if (!roomId || !gameInitialized) return;
 
@@ -144,6 +158,47 @@ export default function GamePage() {
 
     return () => unsubscribe();
   }, [roomId, gameInitialized, user?.uid, showToast]);
+
+  // Subscribe to room updates (for status changes)
+  useEffect(() => {
+    if (!roomId) return;
+
+    const roomRef = doc(db, 'gameRooms', roomId);
+    const unsubscribe = onSnapshot(
+      roomRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const roomData = snapshot.data() as GameRoom;
+          setRoom(roomData);
+
+          // If room status changes to 'playing' and we haven't initialized game yet
+          if (roomData.status === 'playing' && !gameInitialized && !gameState) {
+            const initGameState = async () => {
+              try {
+                const gameStateRef = doc(db, 'gameStates', roomId);
+                const gameStateSnap = await getDoc(gameStateRef);
+                
+                if (!gameStateSnap.exists()) {
+                  const newGameState = initializeGameState(roomId, roomData.playerOrder);
+                  await setDoc(gameStateRef, newGameState);
+                  setGameState(newGameState);
+                  setGameInitialized(true);
+                }
+              } catch (err) {
+                console.error('Error initializing game from room update:', err);
+              }
+            };
+            initGameState();
+          }
+        }
+      },
+      (err) => {
+        console.error('Error listening to room updates:', err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [roomId, gameInitialized, gameState]);
 
   const handleColorSelect = async (color: 'red' | 'yellow' | 'blue' | 'green') => {
     if (!pendingWildCard || !gameState || !user) return;
@@ -396,8 +451,50 @@ export default function GamePage() {
     }
   };
 
-  // ========== IMPROVED LOADING SCREEN ==========
+  // ===== START GAME FUNCTION (Host only) =====
+  const startGame = async () => {
+    if (!room || !user || room.createdBy !== user.uid) {
+      showToast('Only the host can start the game!', 'error', 2000);
+      return;
+    }
+
+    if (room.status === 'playing') {
+      showToast('Game has already started!', 'warning', 2000);
+      return;
+    }
+
+    if (room.playerOrder.length < 2) {
+      showToast('Need at least 2 players to start!', 'warning', 2000);
+      return;
+    }
+
+    if (isStarting) return;
+    setIsStarting(true);
+
+    try {
+      setLoadingMessage('Starting game...');
+      
+      // Update room status to playing
+      const roomRef = doc(db, 'gameRooms', roomId);
+      await updateDoc(roomRef, { status: 'playing' });
+      
+      showToast('Game started! Good luck! 🎮', 'success', 2000);
+      
+    } catch (err) {
+      console.error('Error starting game:', err);
+      showToast('Failed to start game. Please try again.', 'error', 3000);
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  // ========== LOADING SCREEN WITH START GAME BUTTON ==========
   if (authLoading || !gameInitialized || !room || !gameState) {
+    const isHost = room?.createdBy === user?.uid;
+    const isRoomGame = room?.gameType === 'room';
+    const playerCount = room?.playerOrder?.length || 0;
+    const canStart = isHost && isRoomGame && playerCount >= 2 && room?.status !== 'playing';
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
         <button
@@ -442,10 +539,12 @@ export default function GamePage() {
                 </button>
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                {room.playerOrder.length < 2 ? (
-                  `Need ${2 - room.playerOrder.length} more player${2 - room.playerOrder.length !== 1 ? 's' : ''}`
+                {isRoomGame ? (
+                  `👥 ${playerCount} / ${room.maxPlayers} players joined`
                 ) : (
-                  `Ready! (${room.playerOrder.length}/${room.maxPlayers})`
+                  playerCount < 2 ? 
+                    `Need ${2 - playerCount} more player${2 - playerCount !== 1 ? 's' : ''}` :
+                    `Game ready! (${playerCount}/2)`
                 )}
               </p>
             </div>
@@ -470,11 +569,14 @@ export default function GamePage() {
                       </div>
                       <span className="text-xs text-gray-700 truncate max-w-[60px]">
                         {player?.name?.split(' ')[0] || 'Player'}
+                        {playerId === room.createdBy && (
+                          <span className="text-[8px] text-gray-400 ml-1">👑</span>
+                        )}
                       </span>
                     </div>
                   );
                 })}
-                {Array.from({ length: Math.max(0, 2 - room.playerOrder.length) }).map((_, i) => (
+                {Array.from({ length: Math.max(0, (room?.maxPlayers || 0) - (room?.playerOrder?.length || 0)) }).map((_, i) => (
                   <div key={`empty-${i}`} className="flex items-center gap-2 bg-gray-50 rounded-full px-3 py-1.5 opacity-50">
                     <div className="w-6 h-6 rounded-full border-2 border-dashed border-gray-300" />
                     <span className="text-xs text-gray-400">Waiting</span>
@@ -482,6 +584,50 @@ export default function GamePage() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* ===== START GAME BUTTON (Room Games Only, Host Only) ===== */}
+          {room && isRoomGame && isHost && room.status === 'waiting' && (
+            <div className="mt-4">
+              <button
+                onClick={startGame}
+                disabled={!canStart || isStarting}
+                className={`
+                  w-full py-3 px-6 rounded-xl font-bold text-white text-sm sm:text-base transition-all duration-200
+                  ${canStart && !isStarting
+                    ? 'bg-green-600 hover:bg-green-700 transform hover:scale-[1.02] active:scale-[0.98]' 
+                    : 'bg-gray-400 cursor-not-allowed'}
+                `}
+              >
+                {isStarting ? (
+                  'Starting...'
+                ) : canStart ? (
+                  `🚀 Start Game (${playerCount} players)`
+                ) : (
+                  `Need ${2 - playerCount} more player${2 - playerCount !== 1 ? 's' : ''} to start`
+                )}
+              </button>
+              {canStart && !isStarting && (
+                <p className="text-gray-400 text-xs mt-2">
+                  👑 As host, you control when the game begins
+                </p>
+              )}
+              {!canStart && playerCount >= 2 && room.createdBy !== user?.uid && (
+                <p className="text-gray-400 text-xs mt-2">
+                  ⏳ Waiting for host to start the game...
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* 1v1 Auto-start message */}
+          {room && !isRoomGame && room.status === 'waiting' && (
+            <p className="text-gray-400 text-xs mt-4">
+              {playerCount < 2 ? 
+                `⏳ Waiting for ${2 - playerCount} more player${2 - playerCount !== 1 ? 's' : ''} to join...` :
+                '🎮 Game will start automatically when both players are ready!'
+              }
+            </p>
           )}
 
           {error && (
@@ -570,6 +716,7 @@ export default function GamePage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-gray-800 font-semibold text-xs sm:text-sm truncate">
                         {p?.name?.split(' ')[0] || 'Player'}
+                        {id === room.createdBy && <span className="text-gray-400 text-[10px] ml-1">👑</span>}
                       </p>
                       <p className="text-gray-400 text-[10px] sm:text-xs">🃏 {handCount}</p>
                     </div>

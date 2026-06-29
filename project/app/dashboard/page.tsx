@@ -20,7 +20,7 @@ export default function DashboardPage() {
   const [joinCode, setJoinCode] = useState('');
   const [isCreatingGame, setIsCreatingGame] = useState(false);
   const [isJoiningGame, setIsJoiningGame] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(120); // ← CHANGED: 120 seconds (2 minutes)
+  const [timeLeft, setTimeLeft] = useState(120); // Default 2 min
   const [currentRoomId, setCurrentRoomId] = useState<string>('');
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -70,8 +70,11 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const startCountdown = (roomId: string, code: string) => {
-    setTimeLeft(120); // ← CHANGED: 120 seconds (2 minutes)
+  // ✅ UPDATED: Accept gameType parameter
+  const startCountdown = (roomId: string, code: string, gameType: 'oneVsOne' | 'room') => {
+    // ✅ 2 minutes for 1v1, 5 minutes for room
+    const totalSeconds = gameType === 'oneVsOne' ? 120 : 300;
+    setTimeLeft(totalSeconds);
     setCurrentRoomId(roomId);
 
     if (countdownIntervalRef.current) {
@@ -100,7 +103,7 @@ export default function DashboardPage() {
     try {
       const code = generateGameCode();
       const expiryTime = new Date();
-      expiryTime.setMinutes(expiryTime.getMinutes() + 2); // ← CHANGED: 2 minutes
+      expiryTime.setMinutes(expiryTime.getMinutes() + 2); // ✅ 2 minutes for 1v1
 
       const roomId = user.uid + '_' + Date.now();
       const room: GameRoom = {
@@ -119,7 +122,7 @@ export default function DashboardPage() {
       await setDoc(doc(db, 'gameRooms', room.roomId), room);
       setGameCode(code);
       setShowModal(true);
-      startCountdown(roomId, code);
+      startCountdown(roomId, code, 'oneVsOne'); // ✅ Pass game type
     } catch (error) {
       console.error('Error creating game:', error);
     } finally {
@@ -133,7 +136,7 @@ export default function DashboardPage() {
     try {
       const code = generateGameCode();
       const expiryTime = new Date();
-      expiryTime.setMinutes(expiryTime.getMinutes() + 2); // ← CHANGED: 2 minutes
+      expiryTime.setMinutes(expiryTime.getMinutes() + 5); // ✅ 5 minutes for room
 
       const roomId = user.uid + '_room_' + Date.now();
       const room: GameRoom = {
@@ -152,7 +155,7 @@ export default function DashboardPage() {
       await setDoc(doc(db, 'gameRooms', room.roomId), room);
       setGameCode(code);
       setShowModal(true);
-      startCountdown(roomId, code);
+      startCountdown(roomId, code, 'room'); // ✅ Pass game type
     } catch (error) {
       console.error('Error creating room:', error);
     } finally {
@@ -188,6 +191,12 @@ export default function DashboardPage() {
         return;
       }
 
+      // Check if game already started
+      if (roomData.status === 'playing') {
+        alert('This game has already started. You cannot join now.');
+        return;
+      }
+
       const currentPlayerCount = Object.keys(roomData.players || {}).length;
 
       if (roomData.players?.[user.uid]) {
@@ -202,7 +211,11 @@ export default function DashboardPage() {
 
       const updatedPlayers = { ...roomData.players, [user.uid]: playerData };
       const updatedPlayerOrder = [...(roomData.playerOrder || []), user.uid];
-      const updatedStatus = updatedPlayerOrder.length >= 2 ? 'playing' : 'waiting';
+
+      // Room games always wait for host to start
+      const updatedStatus = roomData.gameType === 'oneVsOne' 
+        ? (updatedPlayerOrder.length >= 2 ? 'playing' : 'waiting')
+        : 'waiting';
 
       await setDoc(
         doc(db, 'gameRooms', roomDoc.id),
@@ -380,10 +393,10 @@ export default function DashboardPage() {
 
             <div className="text-center mb-4">
               <p className="text-gray-500 text-sm">Code expires in:</p>
-              <p className={`text-2xl sm:text-3xl font-bold ${timeLeft <= 20 ? 'text-red-500 animate-pulse' : 'text-gray-700'}`}>
+              <p className={`text-2xl sm:text-3xl font-bold ${timeLeft <= 30 ? 'text-red-500 animate-pulse' : 'text-gray-700'}`}>
                 {formatTime(timeLeft)}
               </p>
-              {timeLeft <= 20 && (
+              {timeLeft <= 30 && (
                 <p className="text-xs text-red-500 mt-1">⚠️ Expiring soon!</p>
               )}
             </div>
