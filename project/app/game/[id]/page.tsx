@@ -324,8 +324,17 @@ export default function GamePage() {
 
     const topCard = gameState.discardPile[gameState.discardPile.length - 1];
 
-    if (!canPlayCard(card, topCard, gameState.currentColor)) {
-      setError('This card cannot be played!');
+    // ✅ Debug log
+    console.log('🎯 Playing card:', card.color, card.value);
+    console.log('🎯 Top card:', topCard.color, topCard.value);
+    console.log('🎯 Current color:', gameState.currentColor);
+
+    const isPlayable = canPlayCard(card, topCard, gameState.currentColor);
+    
+    if (!isPlayable) {
+      // ✅ Better error message showing what can be played
+      const topColor = topCard.color === 'wild' ? gameState.currentColor : topCard.color;
+      setError(`❌ Can't play ${card.color} ${card.value} on ${topColor} ${topCard.value}`);
       vibrateError();
       setSelectedCardId(null);
       return;
@@ -727,7 +736,6 @@ export default function GamePage() {
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <ColorPicker isOpen={showColorPicker} onColorSelect={handleColorSelect} />
 
-      {/* Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm px-3 py-2 flex items-center justify-between flex-shrink-0 safe-top">
         <button
           onClick={() => router.push('/dashboard')}
@@ -744,13 +752,9 @@ export default function GamePage() {
         <div className="w-8" />
       </div>
 
-      {/* Main Game Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        
-        {/* Top Section: Opponents & Game Board */}
         <div className="flex-1 overflow-y-auto px-3 py-2">
           
-          {/* Opponents - Horizontal Scroll on Mobile */}
           {otherPlayerIds.length > 0 && (
             <div className="mb-3">
               <p className="text-gray-500 text-[10px] font-medium mb-2 text-center">
@@ -796,7 +800,6 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Game Board */}
           <div className="flex justify-center py-2">
             <GameBoard
               topCard={topCard}
@@ -808,7 +811,6 @@ export default function GamePage() {
             />
           </div>
 
-          {/* Your Info */}
           <div className="mt-3 flex items-center justify-center gap-4 bg-white rounded-2xl p-3 border border-gray-200 shadow-sm">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
@@ -833,7 +835,6 @@ export default function GamePage() {
             )}
           </div>
 
-          {/* Draw Button */}
           <div className="mt-3">
             <button
               onClick={drawCard}
@@ -843,9 +844,14 @@ export default function GamePage() {
               🎴 Draw Card
             </button>
           </div>
+
+          {error && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm text-center">
+              {error}
+            </div>
+          )}
         </div>
 
-        {/* Player Hand - Bottom */}
         <div className="flex-shrink-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-2 pb-2 safe-bottom border-t border-gray-200">
           <PlayerHand
             cards={playerHand}
@@ -856,12 +862,6 @@ export default function GamePage() {
           />
         </div>
       </div>
-
-      {error && (
-        <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto bg-red-500 text-white p-3 rounded-xl text-sm z-50 shadow-lg">
-          {error}
-        </div>
-      )}
     </div>
   );
 }

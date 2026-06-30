@@ -56,6 +56,7 @@ const PlayerHand = ({
       return;
     }
 
+    // ✅ Check if card is playable
     const playable = canPlayCard(card, topCard, currentColor);
 
     if (!playable) {
@@ -63,7 +64,7 @@ const PlayerHand = ({
       return;
     }
 
-    // If card is already selected, play it
+    // ✅ If card is already selected, play it
     if (selectedCardId === card.id) {
       vibrateCardPlay();
       setSelectedCardId(null);
@@ -71,7 +72,7 @@ const PlayerHand = ({
       return;
     }
 
-    // If different card selected, switch selection
+    // ✅ If different card selected, switch selection
     if (selectedCardId !== null) {
       setSelectedCardId(null);
       // Small delay before selecting new card to avoid conflicts
@@ -79,7 +80,7 @@ const PlayerHand = ({
         setSelectedCardId(card.id);
       }, 50);
     } else {
-      // Select the card
+      // ✅ Select the card
       setSelectedCardId(card.id);
     }
   };

@@ -11,7 +11,6 @@ export const generateUnoDeck = (): Card[] => {
   colors.forEach((color) => {
     values.forEach((value, idx) => {
       if (value === '0') {
-        // Only one zero per color
         deck.push({ id: `${color}-${value}-0`, color, value });
       } else {
         deck.push({ id: `${color}-${value}-0`, color, value });
@@ -20,7 +19,6 @@ export const generateUnoDeck = (): Card[] => {
     });
   });
 
-  // 4 Wild and 4 Wild Draw Four
   for (let i = 0; i < 4; i++) {
     deck.push({ id: `wild-${i}`, color: 'wild', value: 'Wild' });
     deck.push({ id: `wild-drawfour-${i}`, color: 'wild', value: 'DrawFour' });
@@ -43,22 +41,28 @@ export const shuffleDeck = (deck: Card[]): Card[] => {
 
 /** Check if a card can be played on the current top card */
 export const canPlayCard = (card: Card, topCard: Card, currentColor: string): boolean => {
-  // Wild cards can always be played
-  if (card.color === 'wild') return true;
+  // ✅ Wild cards can always be played
+  if (card.color === 'wild') {
+    return true;
+  }
   
-  // If top card is wild, use the current game color
+  // ✅ If top card is wild, use the current game color
   const topColor = topCard.color === 'wild' ? currentColor : topCard.color;
   
-  // Same color
-  if (card.color === topColor) return true;
+  // ✅ Same color
+  if (card.color === topColor) {
+    return true;
+  }
   
-  // Same value (number or action) - only if top card is not wild
-  if (topCard.color !== 'wild' && card.value === topCard.value) return true;
+  // ✅ Same value (number or action) - only if top card is not wild
+  if (topCard.color !== 'wild' && card.value === topCard.value) {
+    return true;
+  }
   
   return false;
 };
 
-// ─── Draw Pile Reshuffle (NEW) ──────────────────────────────────────────────────────────
+// ─── Draw Pile Reshuffle ──────────────────────────────────────────────────────────
 
 /** Reshuffle discard pile into draw pile when draw pile is empty */
 export const reshuffleDiscardPile = (state: GameState): GameState => {
@@ -89,7 +93,6 @@ export const drawCardsWithReshuffle = (
     }
     
     if (currentState.drawPile.length === 0) {
-      // No cards left to draw
       break;
     }
     
@@ -211,7 +214,7 @@ export const initializeGameState = (
   };
 };
 
-// ─── Handle Special Cards (FIXED - added reshuffle support) ──────────────────────────────────────────────────────
+// ─── Handle Special Cards ──────────────────────────────────────────────────────
 
 export const applyCardEffect = (
   state: GameState,
@@ -222,7 +225,6 @@ export const applyCardEffect = (
   let newState = { ...state };
   const playerCount = newState.playerOrder.length;
 
-  // Ensure draw pile has cards before drawing
   const ensureDrawPile = (count: number) => {
     let tempState = newState;
     for (let i = 0; i < count; i++) {
@@ -285,7 +287,6 @@ export const applyCardEffect = (
       );
       const targetId = newState.playerOrder[targetIndex];
 
-      // Ensure draw pile has cards
       newState = ensureDrawPile(2);
       
       const { newCards, remainingPile } = drawCards(newState.drawPile, 2);
@@ -321,7 +322,6 @@ export const applyCardEffect = (
       );
       const targetId = newState.playerOrder[targetIndex];
 
-      // Ensure draw pile has cards
       newState = ensureDrawPile(4);
       
       const { newCards, remainingPile } = drawCards(newState.drawPile, 4);
