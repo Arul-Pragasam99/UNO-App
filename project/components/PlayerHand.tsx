@@ -23,7 +23,7 @@ const PlayerHand = ({
   currentColor,
 }: PlayerHandProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
   useEffect(() => {
     if (containerRef.current && cards.length > 0) {
@@ -45,8 +45,16 @@ const PlayerHand = ({
     }
   }, [cards.length]);
 
+  // Reset selection when cards change or turn changes
+  useEffect(() => {
+    setSelectedCardId(null);
+  }, [cards.length, isMyTurn]);
+
   const handleCardClick = (card: Card) => {
-    if (!isMyTurn) return;
+    if (!isMyTurn) {
+      vibrateError();
+      return;
+    }
 
     const playable = canPlayCard(card, topCard, currentColor);
 
@@ -55,12 +63,24 @@ const PlayerHand = ({
       return;
     }
 
-    if (selectedCard === card.id) {
+    // If card is already selected, play it
+    if (selectedCardId === card.id) {
       vibrateCardPlay();
-      setSelectedCard(null);
+      setSelectedCardId(null);
       onCardClick(card);
+      return;
+    }
+
+    // If different card selected, switch selection
+    if (selectedCardId !== null) {
+      setSelectedCardId(null);
+      // Small delay before selecting new card to avoid conflicts
+      setTimeout(() => {
+        setSelectedCardId(card.id);
+      }, 50);
     } else {
-      setSelectedCard(card.id);
+      // Select the card
+      setSelectedCardId(card.id);
     }
   };
 
@@ -76,7 +96,6 @@ const PlayerHand = ({
     );
   }
 
-  // ✅ Mobile-first sizing
   const getCardSize = () => {
     if (cards.length > 14) return 'xs';
     if (cards.length > 10) return 'sm';
@@ -85,14 +104,14 @@ const PlayerHand = ({
 
   return (
     <div className="w-full px-1">
-      {/* Turn indicator - Compact & Clear */}
+      {/* Turn indicator */}
       <div className="text-center mb-1">
         <p className={`text-[10px] sm:text-xs font-semibold ${isMyTurn ? 'text-gray-700' : 'text-gray-400'}`}>
           {isMyTurn ? '👆 Tap a card, tap again to play' : '⏳ Waiting...'}
         </p>
       </div>
 
-      {/* Cards - Mobile optimized horizontal scroll */}
+      {/* Cards */}
       <div
         ref={containerRef}
         className="flex items-end gap-0.5 sm:gap-1 md:gap-1.5 overflow-x-auto overflow-y-visible pb-1 px-1 scroll-smooth snap-x snap-mandatory scrollbar-hide"
@@ -100,7 +119,7 @@ const PlayerHand = ({
       >
         {cards.map((card) => {
           const playable = isCardPlayable(card);
-          const isSelected = selectedCard === card.id;
+          const isSelected = selectedCardId === card.id;
           
           return (
             <div
@@ -124,7 +143,7 @@ const PlayerHand = ({
         })}
       </div>
 
-      {/* Card count badge */}
+      {/* Card count */}
       <div className="text-center mt-0.5">
         <span className="text-gray-400 text-[8px] sm:text-[10px] bg-white/50 px-2 py-0.5 rounded-full">
           🃏 {cards.length}

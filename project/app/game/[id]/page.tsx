@@ -309,6 +309,7 @@ export default function GamePage() {
 
     if (gameState.status === 'finished') {
       setError('Game is already finished');
+      setSelectedCardId(null);
       return;
     }
 
@@ -317,6 +318,7 @@ export default function GamePage() {
     if (user.uid !== currentPlayerId) {
       setError('It is not your turn');
       vibrateError();
+      setSelectedCardId(null);
       return;
     }
 
@@ -325,6 +327,7 @@ export default function GamePage() {
     if (!canPlayCard(card, topCard, gameState.currentColor)) {
       setError('This card cannot be played!');
       vibrateError();
+      setSelectedCardId(null);
       return;
     }
 
@@ -380,6 +383,7 @@ export default function GamePage() {
 
         setError(null);
         vibrateCardPlay();
+        setSelectedCardId(null);
         return;
       }
 
@@ -417,6 +421,7 @@ export default function GamePage() {
     } catch (err) {
       console.error('Error playing card:', err);
       setError('Failed to play card');
+      setSelectedCardId(null);
     } finally {
       setIsMoveInFlight(false);
     }
@@ -722,7 +727,7 @@ export default function GamePage() {
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <ColorPicker isOpen={showColorPicker} onColorSelect={handleColorSelect} />
 
-      {/* ===== HEADER - COMPACT ===== */}
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm px-3 py-2 flex items-center justify-between flex-shrink-0 safe-top">
         <button
           onClick={() => router.push('/dashboard')}
@@ -739,10 +744,10 @@ export default function GamePage() {
         <div className="w-8" />
       </div>
 
-      {/* ===== MAIN GAME AREA - FLEXIBLE ===== */}
+      {/* Main Game Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         
-        {/* ===== TOP SECTION: Opponents & Game Board ===== */}
+        {/* Top Section: Opponents & Game Board */}
         <div className="flex-1 overflow-y-auto px-3 py-2">
           
           {/* Opponents - Horizontal Scroll on Mobile */}
@@ -791,7 +796,7 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* ===== GAME BOARD - CENTERED ===== */}
+          {/* Game Board */}
           <div className="flex justify-center py-2">
             <GameBoard
               topCard={topCard}
@@ -803,7 +808,7 @@ export default function GamePage() {
             />
           </div>
 
-          {/* ===== YOUR INFO - COMPACT ===== */}
+          {/* Your Info */}
           <div className="mt-3 flex items-center justify-center gap-4 bg-white rounded-2xl p-3 border border-gray-200 shadow-sm">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
@@ -828,7 +833,7 @@ export default function GamePage() {
             )}
           </div>
 
-          {/* ===== DRAW BUTTON - BIG & CLEAR ===== */}
+          {/* Draw Button */}
           <div className="mt-3">
             <button
               onClick={drawCard}
@@ -840,7 +845,7 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* ===== PLAYER HAND - BOTTOM ===== */}
+        {/* Player Hand - Bottom */}
         <div className="flex-shrink-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-2 pb-2 safe-bottom border-t border-gray-200">
           <PlayerHand
             cards={playerHand}
