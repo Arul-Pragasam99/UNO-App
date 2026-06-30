@@ -50,6 +50,7 @@ export default function GamePage() {
   const [isMoveInFlight, setIsMoveInFlight] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [expiryTimeLeft, setExpiryTimeLeft] = useState<number | null>(null);
   const handContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -128,6 +129,42 @@ export default function GamePage() {
       isMounted = false;
     };
   }, [roomId, user, authLoading]);
+
+  // ✅ FIXED: Sync expiry time with proper null check
+  useEffect(() => {
+    if (!room?.expiresAt) {
+      setExpiryTimeLeft(null);
+      return;
+    }
+    
+    const updateExpiry = () => {
+      try {
+        const now = new Date();
+        let expiryDate: Date;
+        
+        if (room.expiresAt instanceof Date) {
+          expiryDate = room.expiresAt;
+        } else if (typeof room.expiresAt === 'string') {
+          expiryDate = new Date(room.expiresAt);
+        } else if (room.expiresAt && typeof room.expiresAt === 'object' && 'toDate' in room.expiresAt) {
+          // Firebase Timestamp
+          expiryDate = (room.expiresAt as any).toDate();
+        } else {
+          expiryDate = new Date(room.expiresAt as any);
+        }
+        
+        const diff = Math.max(0, Math.floor((expiryDate.getTime() - now.getTime()) / 1000));
+        setExpiryTimeLeft(diff);
+      } catch (e) {
+        console.error('Error calculating expiry time:', e);
+        setExpiryTimeLeft(null);
+      }
+    };
+    
+    updateExpiry();
+    const interval = setInterval(updateExpiry, 1000);
+    return () => clearInterval(interval);
+  }, [room?.expiresAt]);
 
   useEffect(() => {
     if (!roomId || !gameInitialized) return;
@@ -480,12 +517,12 @@ export default function GamePage() {
     }
   };
 
-  // ========== LOADING SCREEN - SIMPLIFIED ==========
+  // ========== LOADING SCREEN WITH EXPIRY TIMER ==========
   if (authLoading || !gameInitialized || !room || !gameState) {
     const isHost = room?.createdBy === user?.uid;
     const isRoomGame = room?.gameType === 'room';
     const playerCount = room?.playerOrder?.length || 0;
-    const canStart = isHost && isRoomGame && playerCount >= 2 && room?.status !== 'playing';
+    const canStart = isHost && isRoomGame && playerCount >= 2 && room?.status !== 'playing' && expiryTimeLeft !== 0;
 
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 relative">
@@ -511,10 +548,10 @@ export default function GamePage() {
             <div className="h-full bg-gray-700 rounded-full animate-progress" style={{ width: '45%' }} />
           </div>
 
+          {/* Game Code Section with Expiry Timer */}
           {room && (
             <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 mb-4">
               <p className="text-gray-500 text-xs text-center mb-1">Game Code</p>
-              {/* Click to copy */}
               <div 
                 className="flex items-center justify-center cursor-pointer select-none"
                 onClick={() => {
@@ -531,6 +568,7 @@ export default function GamePage() {
                   </svg>
                 </div>
               </div>
+
               <p className="text-xs text-gray-400 text-center mt-2">
                 {isRoomGame ? (
                   `👥 ${playerCount} / ${room.maxPlayers} players joined`
@@ -540,6 +578,29 @@ export default function GamePage() {
                     `Game ready! (${playerCount}/2)`
                 )}
               </p>
+
+              {/* ===== EXPIRY TIMER - SHOWS ROOM AUTO-CLOSE ===== */}
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="flex items-center justify-center gap-2">
+                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-gray-400 text-[10px]">Room auto-closes in:</span>
+                  <span className={`text-xs font-mono font-bold ${expiryTimeLeft !== null && expiryTimeLeft <= 30 ? 'text-red-500 animate-pulse' : 'text-gray-600'}`}>
+                    {expiryTimeLeft !== null ? (
+                      `${Math.floor(expiryTimeLeft / 60)}:${(expiryTimeLeft % 60).toString().padStart(2, '0')}`
+                    ) : (
+                      '--:--'
+                    )}
+                  </span>
+                  {expiryTimeLeft !== null && expiryTimeLeft <= 30 && (
+                    <span className="text-[10px] text-red-500 font-medium animate-pulse">⚠️</span>
+                  )}
+                </div>
+                <p className="text-[10px] text-gray-400 text-center mt-1">
+                  Room will be deleted when timer reaches 0
+                </p>
+              </div>
             </div>
           )}
 
@@ -584,30 +645,37 @@ export default function GamePage() {
             <div className="mt-4">
               <button
                 onClick={startGame}
-                disabled={!canStart || isStarting}
+                disabled={!canStart || isStarting || (expiryTimeLeft !== null && expiryTimeLeft === 0)}
                 className={`
                   w-full py-3 px-6 rounded-xl font-bold text-white text-sm sm:text-base transition-all duration-200
-                  ${canStart && !isStarting
+                  ${canStart && !isStarting && expiryTimeLeft !== 0
                     ? 'bg-green-600 hover:bg-green-700 transform hover:scale-[1.02] active:scale-[0.98]' 
                     : 'bg-gray-400 cursor-not-allowed'}
                 `}
               >
                 {isStarting ? (
                   'Starting...'
+                ) : expiryTimeLeft === 0 ? (
+                  'Room Expired'
                 ) : canStart ? (
                   `🚀 Start Game (${playerCount} players)`
                 ) : (
                   `Need ${2 - playerCount} more player${2 - playerCount !== 1 ? 's' : ''} to start`
                 )}
               </button>
-              {canStart && !isStarting && (
+              {canStart && !isStarting && expiryTimeLeft !== 0 && (
                 <p className="text-gray-400 text-xs text-center mt-2">
                   👑 As host, you control when the game begins
                 </p>
               )}
-              {!canStart && playerCount >= 2 && room.createdBy !== user?.uid && (
+              {!canStart && playerCount >= 2 && room.createdBy !== user?.uid && expiryTimeLeft !== 0 && (
                 <p className="text-gray-400 text-xs text-center mt-2">
                   ⏳ Waiting for host to start the game...
+                </p>
+              )}
+              {expiryTimeLeft === 0 && (
+                <p className="text-red-500 text-xs text-center mt-2">
+                  ⚠️ Room has expired and will be deleted
                 </p>
               )}
             </div>
