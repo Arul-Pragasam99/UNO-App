@@ -56,13 +56,8 @@ const ColorPicker = ({ onColorSelect, isOpen }: ColorPickerProps) => {
     <div
       ref={overlayRef}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={(e) => {
-        if (e.target === overlayRef.current && !hasSelected) {
-          // Close on backdrop click (optional)
-        }
-      }}
     >
-      <div ref={pickerRef} className="bg-white rounded-3xl p-6 sm:p-8 shadow-2xl max-w-xs w-full">
+      <div ref={pickerRef} className="bg-white rounded-3xl p-6 sm:p-8 shadow-2xl max-w-xs w-full mx-4">
         <h3 className="text-gray-800 text-lg sm:text-xl font-bold text-center mb-1">
           Choose a Color
         </h3>
@@ -70,7 +65,7 @@ const ColorPicker = ({ onColorSelect, isOpen }: ColorPickerProps) => {
           Select the color for your wild card
         </p>
 
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:gap-4">
           {colors.map(({ name, bg, label }) => (
             <button
               key={name}
@@ -80,7 +75,7 @@ const ColorPicker = ({ onColorSelect, isOpen }: ColorPickerProps) => {
                 aspect-square rounded-2xl flex flex-col items-center justify-center gap-1
                 transition-all duration-200 active:scale-95
                 hover:scale-105 border-2 border-gray-200 hover:border-gray-400
-                min-h-[72px] sm:min-h-[88px]
+                min-h-[80px] sm:min-h-[88px] min-w-[80px] sm:min-w-[88px]
                 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100
               "
               style={{

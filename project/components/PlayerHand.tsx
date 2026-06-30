@@ -37,7 +37,7 @@ const PlayerHand = ({
             y: 0,
             scale: 1,
             stagger: { each: 0.03, from: 'center' },
-            duration: 0.4,
+            duration: 0.3,
             ease: 'back.out(1.2)',
           }
         );
@@ -70,25 +70,32 @@ const PlayerHand = ({
 
   if (cards.length === 0) {
     return (
-      <div className="w-full text-center py-2">
+      <div className="w-full text-center py-4">
         <p className="text-gray-400 text-sm">No cards left!</p>
       </div>
     );
   }
 
+  // ✅ Mobile-first sizing
+  const getCardSize = () => {
+    if (cards.length > 14) return 'xs';
+    if (cards.length > 10) return 'sm';
+    return 'md';
+  };
+
   return (
-    <div className="w-full px-1 sm:px-4">
-      {/* Turn indicator - Compact */}
-      <div className="text-center mb-1 sm:mb-2">
+    <div className="w-full px-1">
+      {/* Turn indicator - Compact & Clear */}
+      <div className="text-center mb-1">
         <p className={`text-[10px] sm:text-xs font-semibold ${isMyTurn ? 'text-gray-700' : 'text-gray-400'}`}>
-          {isMyTurn ? '✨ Tap card to select, tap again to play' : '⏳ Waiting for opponent...'}
+          {isMyTurn ? '👆 Tap a card, tap again to play' : '⏳ Waiting...'}
         </p>
       </div>
 
-      {/* Cards */}
+      {/* Cards - Mobile optimized horizontal scroll */}
       <div
         ref={containerRef}
-        className="flex items-end gap-0.5 sm:gap-1 md:gap-1.5 overflow-x-auto overflow-y-visible pb-1 px-1 sm:px-2 scroll-smooth snap-x snap-mandatory justify-start sm:justify-center scrollbar-hide"
+        className="flex items-end gap-0.5 sm:gap-1 md:gap-1.5 overflow-x-auto overflow-y-visible pb-1 px-1 scroll-smooth snap-x snap-mandatory scrollbar-hide"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {cards.map((card) => {
@@ -100,7 +107,7 @@ const PlayerHand = ({
               key={card.id}
               className="flex-shrink-0 snap-center"
               style={{
-                transform: isSelected ? 'translateY(-8px)' : 'none',
+                transform: isSelected ? 'translateY(-10px)' : 'none',
                 transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
               }}
             >
@@ -110,14 +117,14 @@ const PlayerHand = ({
                 isSelectable={isMyTurn}
                 isSelected={isSelected}
                 isPlayable={playable}
-                size={cards.length > 12 ? 'xs' : cards.length > 8 ? 'sm' : 'md'}
+                size={getCardSize()}
               />
             </div>
           );
         })}
       </div>
 
-      {/* Card count */}
+      {/* Card count badge */}
       <div className="text-center mt-0.5">
         <span className="text-gray-400 text-[8px] sm:text-[10px] bg-white/50 px-2 py-0.5 rounded-full">
           🃏 {cards.length}

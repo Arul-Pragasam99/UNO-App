@@ -54,12 +54,12 @@ const GameBoard = ({
   };
 
   return (
-    <div className="w-full max-w-sm sm:max-w-md mx-auto">
+    <div className="w-full max-w-xs sm:max-w-sm mx-auto">
       {/* Direction & Color - Compact */}
-      <div className="flex items-center justify-center gap-2 sm:gap-4 mb-3">
+      <div className="flex items-center justify-center gap-2 sm:gap-3 mb-2">
         <div
           ref={directionRef}
-          className="flex items-center gap-1 sm:gap-2 bg-white/80 backdrop-blur rounded-full px-3 sm:px-4 py-1 border border-gray-200 shadow-sm"
+          className="flex items-center gap-1 bg-white/80 backdrop-blur rounded-full px-2.5 sm:px-3 py-0.5 border border-gray-200 shadow-sm"
         >
           <span className="text-gray-600 text-[10px] sm:text-xs font-medium">
             {direction === 1 ? '→' : '←'}
@@ -67,7 +67,7 @@ const GameBoard = ({
           <span className="text-gray-400 text-[8px] sm:text-[10px]">🔄</span>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2 bg-white/80 backdrop-blur rounded-full px-3 sm:px-4 py-1 border border-gray-200 shadow-sm">
+        <div className="flex items-center gap-1 bg-white/80 backdrop-blur rounded-full px-2.5 sm:px-3 py-0.5 border border-gray-200 shadow-sm">
           <div
             className="w-3 h-3 sm:w-4 sm:h-4 rounded-full border border-gray-300 transition-colors"
             style={{
@@ -75,16 +75,18 @@ const GameBoard = ({
               boxShadow: `0 0 8px ${colorIndicatorMap[currentColor] || '#888'}40`,
             }}
           />
-          <span className="text-gray-600 text-[10px] sm:text-xs font-medium capitalize">{currentColor}</span>
+          <span className="text-gray-600 text-[10px] sm:text-xs font-medium capitalize">
+            {currentColor}
+          </span>
         </div>
       </div>
 
-      {/* Card piles */}
-      <div className="flex items-center justify-center gap-4 sm:gap-8">
+      {/* Card piles - Centered */}
+      <div className="flex items-center justify-center gap-6 sm:gap-8">
         {/* Discard Pile */}
         <div className="flex flex-col items-center">
-          <p className="text-gray-400 text-[8px] sm:text-xs mb-1 font-medium">Discard</p>
-          <div ref={discardRef} className="relative">
+          <p className="text-gray-400 text-[8px] sm:text-xs font-medium">Discard</p>
+          <div ref={discardRef} className="relative mt-1">
             <div className="absolute inset-0 translate-x-0.5 translate-y-0.5 opacity-30">
               <GameCard card={topCard} size="lg" animate={false} />
             </div>
@@ -92,37 +94,25 @@ const GameBoard = ({
           </div>
         </div>
 
-        {/* Draw Pile */}
+        {/* Draw Pile - Bigger touch target */}
         <div className="flex flex-col items-center">
-          <p className="text-gray-400 text-[8px] sm:text-xs mb-1 font-medium">Draw</p>
+          <p className="text-gray-400 text-[8px] sm:text-xs font-medium">Draw</p>
           <button
             onClick={onDrawCard}
             disabled={!isMyTurn}
-            className={`relative group transition-transform duration-200 ${
+            className={`relative mt-1 transition-transform duration-200 ${
               isMyTurn ? 'active:scale-95' : 'opacity-50 cursor-not-allowed'
             }`}
+            style={{ minHeight: '44px', minWidth: '44px' }}
           >
             <div className="relative">
-              {[2, 1, 0].map((i) => (
-                <div
-                  key={i}
-                  className="absolute inset-0"
-                  style={{
-                    transform: `translateX(${i * 1.5}px) translateY(${i * 1.5}px)`,
-                    zIndex: 3 - i,
-                    opacity: i === 0 ? 1 : 0.7 - i * 0.2,
-                  }}
-                >
-                  <CardBack size="lg" />
-                </div>
-              ))}
-              <div className="relative z-10">
+              {/* Stacked cards */}
+              <div className="relative">
                 <CardBack size="lg" />
+                <div className="absolute -top-1 -right-1 z-20 bg-gray-700 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border border-white shadow-sm">
+                  {drawPileSize}
+                </div>
               </div>
-            </div>
-
-            <div className="absolute -top-1 -right-1 z-20 bg-gray-700 text-white text-[10px] font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center border border-white shadow-sm">
-              {drawPileSize}
             </div>
 
             {isMyTurn && (

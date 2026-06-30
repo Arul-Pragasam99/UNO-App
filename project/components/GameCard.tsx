@@ -52,12 +52,13 @@ const GameCard = ({
     onClick();
   };
 
+  // ✅ Responsive sizes for mobile
   const getSizeClasses = () => {
     switch (size) {
-      case 'xs': return 'w-10 h-[60px] sm:w-12 sm:h-[72px]';
-      case 'sm': return 'w-12 h-[72px] sm:w-14 sm:h-[84px]';
+      case 'xs': return 'w-9 h-[54px] sm:w-11 sm:h-[66px]';
+      case 'sm': return 'w-11 h-[66px] sm:w-13 sm:h-[78px]';
       case 'lg': return 'w-20 h-[120px] sm:w-24 sm:h-36';
-      default: return 'w-16 h-[96px] sm:w-[72px] sm:h-[108px]';
+      default: return 'w-14 h-[84px] sm:w-[72px] sm:h-[108px]';
     }
   };
 
@@ -79,7 +80,7 @@ const GameCard = ({
       className={`
         ${getSizeClasses()}
         relative flex items-center justify-center
-        rounded-xl transition-all duration-200
+        rounded-lg sm:rounded-xl transition-all duration-200
         ${isSelectable ? 'cursor-pointer active:scale-95' : ''}
         ${isSelected ? 'ring-2 ring-gray-700 ring-offset-2 ring-offset-white -translate-y-2 sm:-translate-y-3' : ''}
         ${isSelectable && isPlayable ? 'hover:-translate-y-1 sm:hover:-translate-y-2 hover:shadow-lg' : ''}
@@ -92,10 +93,9 @@ const GameCard = ({
         <CardFace card={card} size={size} />
       </div>
 
-      {/* Playable glow */}
       {isSelectable && isPlayable && (
         <div 
-          className="absolute inset-0 rounded-xl opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+          className="absolute inset-0 rounded-lg sm:rounded-xl opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"
           style={{
             boxShadow: `0 0 12px ${getGlowColor(card.color)}, 0 0 24px ${getGlowColor(card.color)}`,
           }}

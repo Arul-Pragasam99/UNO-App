@@ -130,7 +130,6 @@ export default function GamePage() {
     };
   }, [roomId, user, authLoading]);
 
-  // ✅ FIXED: Sync expiry time with proper null check
   useEffect(() => {
     if (!room?.expiresAt) {
       setExpiryTimeLeft(null);
@@ -147,7 +146,6 @@ export default function GamePage() {
         } else if (typeof room.expiresAt === 'string') {
           expiryDate = new Date(room.expiresAt);
         } else if (room.expiresAt && typeof room.expiresAt === 'object' && 'toDate' in room.expiresAt) {
-          // Firebase Timestamp
           expiryDate = (room.expiresAt as any).toDate();
         } else {
           expiryDate = new Date(room.expiresAt as any);
@@ -517,7 +515,7 @@ export default function GamePage() {
     }
   };
 
-  // ========== LOADING SCREEN WITH EXPIRY TIMER ==========
+  // ========== LOADING SCREEN ==========
   if (authLoading || !gameInitialized || !room || !gameState) {
     const isHost = room?.createdBy === user?.uid;
     const isRoomGame = room?.gameType === 'room';
@@ -548,7 +546,6 @@ export default function GamePage() {
             <div className="h-full bg-gray-700 rounded-full animate-progress" style={{ width: '45%' }} />
           </div>
 
-          {/* Game Code Section with Expiry Timer */}
           {room && (
             <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 mb-4">
               <p className="text-gray-500 text-xs text-center mb-1">Game Code</p>
@@ -579,7 +576,6 @@ export default function GamePage() {
                 )}
               </p>
 
-              {/* ===== EXPIRY TIMER - SHOWS ROOM AUTO-CLOSE ===== */}
               <div className="mt-3 pt-3 border-t border-gray-100">
                 <div className="flex items-center justify-center gap-2">
                   <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -604,7 +600,6 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Players List */}
           {room && (
             <div className="bg-white border border-gray-100 rounded-xl p-3 sm:p-4 mb-4">
               <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
@@ -640,7 +635,6 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Start Game Button */}
           {room && isRoomGame && isHost && room.status === 'waiting' && (
             <div className="mt-4">
               <button
@@ -717,7 +711,7 @@ export default function GamePage() {
     );
   }
 
-  // ========== GAME UI ==========
+  // ========== MOBILE-FIRST GAME UI ==========
   const currentPlayerId = getCurrentPlayerId(gameState);
   const isCurrentPlayer = user?.uid === currentPlayerId;
   const playerHand = getPlayerHand(gameState, user!.uid);
@@ -725,10 +719,11 @@ export default function GamePage() {
   const topCard = gameState.discardPile[gameState.discardPile.length - 1];
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 flex flex-col">
       <ColorPicker isOpen={showColorPicker} onColorSelect={handleColorSelect} />
 
-      <div className="bg-white border-b border-gray-200 shadow-sm px-3 sm:px-4 py-2 flex items-center justify-between sticky top-0 z-10 safe-top">
+      {/* ===== HEADER - COMPACT ===== */}
+      <div className="bg-white border-b border-gray-200 shadow-sm px-3 py-2 flex items-center justify-between flex-shrink-0 safe-top">
         <button
           onClick={() => router.push('/dashboard')}
           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -739,57 +734,65 @@ export default function GamePage() {
         </button>
         <div className="flex items-center gap-2">
           <span className="text-gray-500 text-xs hidden sm:inline">Code:</span>
-          <span className="font-mono font-bold text-gray-800 text-sm sm:text-base">{room.gameCode}</span>
+          <span className="font-mono font-bold text-gray-800 text-sm">{room.gameCode}</span>
         </div>
         <div className="w-8" />
       </div>
 
-      <div className="max-w-6xl mx-auto px-2 sm:px-4 py-2 sm:py-4">
-        <div className="grid grid-cols-4 gap-2 sm:gap-4">
-          <div className="col-span-1 bg-white rounded-2xl p-3 sm:p-4 border border-gray-200 shadow-sm overflow-y-auto max-h-[calc(100vh-200px)]">
-            <p className="text-gray-500 text-xs font-medium mb-3 text-center">
-              {otherPlayerIds.length === 1 ? 'Opponent' : `Players (${otherPlayerIds.length + 1})`}
-            </p>
-            <div className="space-y-2">
-              {otherPlayerIds.map((id) => {
-                const p = room.players[id];
-                const handCount = getPlayerHand(gameState, id).length;
-                const isTheirTurn = currentPlayerId === id;
-                const initial = p?.name?.charAt(0)?.toUpperCase() || '?';
+      {/* ===== MAIN GAME AREA - FLEXIBLE ===== */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        
+        {/* ===== TOP SECTION: Opponents & Game Board ===== */}
+        <div className="flex-1 overflow-y-auto px-3 py-2">
+          
+          {/* Opponents - Horizontal Scroll on Mobile */}
+          {otherPlayerIds.length > 0 && (
+            <div className="mb-3">
+              <p className="text-gray-500 text-[10px] font-medium mb-2 text-center">
+                {otherPlayerIds.length === 1 ? 'Opponent' : `Players (${otherPlayerIds.length})`}
+              </p>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {otherPlayerIds.map((id) => {
+                  const p = room.players[id];
+                  const handCount = getPlayerHand(gameState, id).length;
+                  const isTheirTurn = currentPlayerId === id;
+                  const initial = p?.name?.charAt(0)?.toUpperCase() || '?';
 
-                return (
-                  <div
-                    key={id}
-                    className={`flex items-center gap-2 rounded-xl p-2 border transition-all ${
-                      isTheirTurn ? 'border-gray-400 bg-gray-50 ring-1 ring-gray-300' : 'border-gray-100 bg-white'
-                    }`}
-                  >
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {p?.photoURL ? (
-                        <img src={p.photoURL} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-gray-600 font-bold text-xs sm:text-sm">{initial}</span>
+                  return (
+                    <div
+                      key={id}
+                      className={`flex-shrink-0 flex items-center gap-2 rounded-xl px-3 py-1.5 border transition-all min-w-[80px] ${
+                        isTheirTurn ? 'border-gray-400 bg-gray-50 ring-1 ring-gray-300' : 'border-gray-100 bg-white'
+                      }`}
+                    >
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {p?.photoURL ? (
+                          <img src={p.photoURL} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-gray-600 font-bold text-xs">{initial}</span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-gray-800 font-semibold text-xs truncate">
+                          {p?.name?.split(' ')[0] || 'Player'}
+                          {id === room.createdBy && <span className="text-gray-400 text-[10px] ml-0.5">👑</span>}
+                        </p>
+                        <p className="text-gray-400 text-[10px]">🃏 {handCount}</p>
+                      </div>
+                      {isTheirTurn && (
+                        <span className="text-[8px] bg-gray-700 text-white px-1.5 py-0.5 rounded-full animate-pulse flex-shrink-0">
+                          Turn
+                        </span>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-800 font-semibold text-xs sm:text-sm truncate">
-                        {p?.name?.split(' ')[0] || 'Player'}
-                        {id === room.createdBy && <span className="text-gray-400 text-[10px] ml-1">👑</span>}
-                      </p>
-                      <p className="text-gray-400 text-[10px] sm:text-xs">🃏 {handCount}</p>
-                    </div>
-                    {isTheirTurn && (
-                      <span className="text-[8px] sm:text-[10px] bg-gray-700 text-white px-1.5 py-0.5 rounded-full animate-pulse flex-shrink-0">
-                        Turn
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="col-span-2 flex flex-col items-center justify-center">
+          {/* ===== GAME BOARD - CENTERED ===== */}
+          <div className="flex justify-center py-2">
             <GameBoard
               topCard={topCard}
               drawPileSize={gameState.drawPile.length}
@@ -800,51 +803,60 @@ export default function GamePage() {
             />
           </div>
 
-          <div className="col-span-1 bg-white rounded-2xl p-3 sm:p-4 border border-gray-200 shadow-sm">
-            <div className="text-center">
-              <div className="flex justify-center mb-2">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden border-2 border-white shadow-md">
-                  {playerData?.photoURL ? (
-                    <img src={playerData.photoURL} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-gray-600 font-bold text-xl sm:text-2xl">
-                      {playerData?.name?.charAt(0)?.toUpperCase() || '?'}
-                    </span>
-                  )}
-                </div>
+          {/* ===== YOUR INFO - COMPACT ===== */}
+          <div className="mt-3 flex items-center justify-center gap-4 bg-white rounded-2xl p-3 border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
+                {playerData?.photoURL ? (
+                  <img src={playerData.photoURL} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-gray-600 font-bold text-sm">
+                    {playerData?.name?.charAt(0)?.toUpperCase() || '?'}
+                  </span>
+                )}
               </div>
-              <p className="text-gray-500 text-[10px] sm:text-xs">You</p>
-              <p className="text-gray-800 font-semibold text-xs sm:text-sm truncate">{playerData?.name}</p>
-              <div className="mt-2 bg-gray-50 rounded-lg p-2">
-                <p className="text-gray-500 text-[10px] sm:text-xs">Cards</p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-800">{playerHand.length}</p>
+              <div>
+                <p className="text-gray-800 font-semibold text-xs truncate max-w-[80px]">{playerData?.name}</p>
+                <p className="text-gray-400 text-[10px]">🃏 {playerHand.length} cards</p>
               </div>
-              {isCurrentPlayer && gameState.status !== 'finished' && (
-                <p className="mt-2 text-green-600 font-bold text-xs sm:text-sm animate-pulse">Your Turn</p>
-              )}
-              {gameState.status === 'finished' && gameState.winner === user?.uid && (
-                <p className="mt-2 text-yellow-600 font-bold text-sm">🎉 WINNER!</p>
-              )}
             </div>
+            {isCurrentPlayer && gameState.status !== 'finished' && (
+              <span className="text-green-600 font-bold text-xs animate-pulse">Your Turn</span>
+            )}
+            {gameState.status === 'finished' && gameState.winner === user?.uid && (
+              <span className="text-yellow-600 font-bold text-sm">🎉 WINNER!</span>
+            )}
           </div>
+
+          {/* ===== DRAW BUTTON - BIG & CLEAR ===== */}
+          <div className="mt-3">
+            <button
+              onClick={drawCard}
+              disabled={!isCurrentPlayer || gameState.status === 'finished' || isMoveInFlight}
+              className="w-full py-3 bg-gray-800 hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm min-h-[48px]"
+            >
+              🎴 Draw Card
+            </button>
+          </div>
+        </div>
+
+        {/* ===== PLAYER HAND - BOTTOM ===== */}
+        <div className="flex-shrink-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-2 pb-2 safe-bottom border-t border-gray-200">
+          <PlayerHand
+            cards={playerHand}
+            onCardClick={playCard}
+            isMyTurn={isCurrentPlayer && gameState.status !== 'finished' && !isMoveInFlight}
+            topCard={topCard}
+            currentColor={gameState.currentColor}
+          />
         </div>
       </div>
 
       {error && (
-        <div className="fixed bottom-24 left-4 right-4 max-w-md mx-auto bg-red-500 text-white p-3 rounded-xl text-sm z-50 shadow-lg">
+        <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto bg-red-500 text-white p-3 rounded-xl text-sm z-50 shadow-lg">
           {error}
         </div>
       )}
-
-      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-3 pb-3 sm:pb-4 safe-bottom border-t border-gray-200">
-        <PlayerHand
-          cards={playerHand}
-          onCardClick={playCard}
-          isMyTurn={isCurrentPlayer && gameState.status !== 'finished' && !isMoveInFlight}
-          topCard={topCard}
-          currentColor={gameState.currentColor}
-        />
-      </div>
     </div>
   );
 }

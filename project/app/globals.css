@@ -171,3 +171,36 @@ a,
     gap: 8px;
   }
 }
+
+/* ===== HIDE SCROLLBAR UTILITY ===== */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ===== SAFE AREA UTILITIES ===== */
+@supports (padding: max(0px)) {
+  .safe-top {
+    padding-top: max(env(safe-area-inset-top), 0px);
+  }
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+}
+
+/* ===== MOBILE TOUCH IMPROVEMENTS ===== */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, 
+a,
+[role="button"] {
+  touch-action: manipulation;
+  min-height: 44px;
+  min-width: 44px;
+}
