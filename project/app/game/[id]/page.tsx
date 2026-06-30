@@ -84,8 +84,6 @@ export default function GamePage() {
         const gameStateSnap = await getDoc(gameStateRef);
 
         if (!gameStateSnap.exists()) {
-          // Check if room is ready to start (only for 1v1 auto-start)
-          // For room games, we wait for host to click "Start Game"
           if (roomData.gameType === 'oneVsOne' && roomData.playerOrder.length >= 2) {
             setLoadingMessage('Initializing game...');
             const newGameState = initializeGameState(roomId, roomData.playerOrder);
@@ -98,7 +96,6 @@ export default function GamePage() {
 
             await updateDoc(roomRef, { status: 'playing' });
           } else if (roomData.gameType === 'room' && roomData.status === 'playing') {
-            // Host has started the game
             setLoadingMessage('Starting game...');
             const newGameState = initializeGameState(roomId, roomData.playerOrder);
             await setDoc(gameStateRef, newGameState);
@@ -132,7 +129,6 @@ export default function GamePage() {
     };
   }, [roomId, user, authLoading]);
 
-  // Subscribe to game state updates
   useEffect(() => {
     if (!roomId || !gameInitialized) return;
 
@@ -159,7 +155,6 @@ export default function GamePage() {
     return () => unsubscribe();
   }, [roomId, gameInitialized, user?.uid, showToast]);
 
-  // Subscribe to room updates (for status changes)
   useEffect(() => {
     if (!roomId) return;
 
@@ -171,7 +166,6 @@ export default function GamePage() {
           const roomData = snapshot.data() as GameRoom;
           setRoom(roomData);
 
-          // If room status changes to 'playing' and we haven't initialized game yet
           if (roomData.status === 'playing' && !gameInitialized && !gameState) {
             const initGameState = async () => {
               try {
@@ -451,7 +445,6 @@ export default function GamePage() {
     }
   };
 
-  // ===== START GAME FUNCTION (Host only) =====
   const startGame = async () => {
     if (!room || !user || room.createdBy !== user.uid) {
       showToast('Only the host can start the game!', 'error', 2000);
@@ -474,7 +467,6 @@ export default function GamePage() {
     try {
       setLoadingMessage('Starting game...');
       
-      // Update room status to playing
       const roomRef = doc(db, 'gameRooms', roomId);
       await updateDoc(roomRef, { status: 'playing' });
       
@@ -488,7 +480,7 @@ export default function GamePage() {
     }
   };
 
-  // ========== LOADING SCREEN WITH START GAME BUTTON ==========
+  // ========== LOADING SCREEN - SIMPLIFIED ==========
   if (authLoading || !gameInitialized || !room || !gameState) {
     const isHost = room?.createdBy === user?.uid;
     const isRoomGame = room?.gameType === 'room';
@@ -496,7 +488,7 @@ export default function GamePage() {
     const canStart = isHost && isRoomGame && playerCount >= 2 && room?.status !== 'playing';
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 relative">
         <button
           onClick={() => router.push('/dashboard')}
           className="absolute top-4 left-4 px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl shadow-sm transition-colors text-sm z-10"
@@ -520,25 +512,26 @@ export default function GamePage() {
           </div>
 
           {room && (
-            <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
-              <p className="text-gray-500 text-xs mb-1">Game Code</p>
-              <div className="flex items-center justify-center gap-3">
-                <p className="text-3xl sm:text-4xl font-mono font-bold text-gray-800 tracking-widest">
-                  {room.gameCode}
-                </p>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(room.gameCode);
-                    showToast('Copied!', 'success', 1500);
-                  }}
-                  className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
-                >
-                  <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 mb-4">
+              <p className="text-gray-500 text-xs text-center mb-1">Game Code</p>
+              {/* Click to copy */}
+              <div 
+                className="flex items-center justify-center cursor-pointer select-none"
+                onClick={() => {
+                  navigator.clipboard.writeText(room.gameCode);
+                  showToast('Game code copied! 📋', 'success', 1500);
+                }}
+              >
+                <div className="flex items-center gap-2 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl px-4 py-2 transition-colors">
+                  <p className="text-2xl sm:text-3xl font-mono font-bold text-gray-800 tracking-widest">
+                    {room.gameCode}
+                  </p>
+                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                   </svg>
-                </button>
+                </div>
               </div>
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs text-gray-400 text-center mt-2">
                 {isRoomGame ? (
                   `👥 ${playerCount} / ${room.maxPlayers} players joined`
                 ) : (
@@ -552,41 +545,41 @@ export default function GamePage() {
 
           {/* Players List */}
           {room && (
-            <div className="bg-white border border-gray-100 rounded-xl p-3 mb-4">
-              <div className="flex flex-wrap gap-2 justify-center">
+            <div className="bg-white border border-gray-100 rounded-xl p-3 sm:p-4 mb-4">
+              <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
                 {room.playerOrder.map((playerId) => {
                   const player = room.players[playerId];
                   return (
-                    <div key={playerId} className="flex items-center gap-2 bg-gray-50 rounded-full px-3 py-1.5">
-                      <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center overflow-hidden">
+                    <div key={playerId} className="flex items-center gap-1.5 bg-gray-50 rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5">
+                      <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-300 flex items-center justify-center overflow-hidden flex-shrink-0">
                         {player?.photoURL ? (
                           <img src={player.photoURL} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-xs font-bold text-gray-600">
+                          <span className="text-[10px] sm:text-xs font-bold text-gray-600">
                             {player?.name?.charAt(0) || '?'}
                           </span>
                         )}
                       </div>
-                      <span className="text-xs text-gray-700 truncate max-w-[60px]">
+                      <span className="text-[10px] sm:text-xs text-gray-700 truncate max-w-[50px] sm:max-w-[60px]">
                         {player?.name?.split(' ')[0] || 'Player'}
-                        {playerId === room.createdBy && (
-                          <span className="text-[8px] text-gray-400 ml-1">👑</span>
-                        )}
                       </span>
+                      {playerId === room.createdBy && (
+                        <span className="text-[8px] sm:text-[10px] text-gray-400 ml-0.5">👑</span>
+                      )}
                     </div>
                   );
                 })}
                 {Array.from({ length: Math.max(0, (room?.maxPlayers || 0) - (room?.playerOrder?.length || 0)) }).map((_, i) => (
-                  <div key={`empty-${i}`} className="flex items-center gap-2 bg-gray-50 rounded-full px-3 py-1.5 opacity-50">
-                    <div className="w-6 h-6 rounded-full border-2 border-dashed border-gray-300" />
-                    <span className="text-xs text-gray-400">Waiting</span>
+                  <div key={`empty-${i}`} className="flex items-center gap-1.5 bg-gray-50 rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5 opacity-50">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-dashed border-gray-300 flex-shrink-0" />
+                    <span className="text-[10px] sm:text-xs text-gray-400">Waiting</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* ===== START GAME BUTTON (Room Games Only, Host Only) ===== */}
+          {/* Start Game Button */}
           {room && isRoomGame && isHost && room.status === 'waiting' && (
             <div className="mt-4">
               <button
@@ -608,21 +601,20 @@ export default function GamePage() {
                 )}
               </button>
               {canStart && !isStarting && (
-                <p className="text-gray-400 text-xs mt-2">
+                <p className="text-gray-400 text-xs text-center mt-2">
                   👑 As host, you control when the game begins
                 </p>
               )}
               {!canStart && playerCount >= 2 && room.createdBy !== user?.uid && (
-                <p className="text-gray-400 text-xs mt-2">
+                <p className="text-gray-400 text-xs text-center mt-2">
                   ⏳ Waiting for host to start the game...
                 </p>
               )}
             </div>
           )}
 
-          {/* 1v1 Auto-start message */}
           {room && !isRoomGame && room.status === 'waiting' && (
-            <p className="text-gray-400 text-xs mt-4">
+            <p className="text-gray-400 text-xs text-center mt-4">
               {playerCount < 2 ? 
                 `⏳ Waiting for ${2 - playerCount} more player${2 - playerCount !== 1 ? 's' : ''} to join...` :
                 '🎮 Game will start automatically when both players are ready!'
@@ -668,7 +660,6 @@ export default function GamePage() {
     <div className="min-h-screen bg-gray-100">
       <ColorPicker isOpen={showColorPicker} onColorSelect={handleColorSelect} />
 
-      {/* Header - Compact */}
       <div className="bg-white border-b border-gray-200 shadow-sm px-3 sm:px-4 py-2 flex items-center justify-between sticky top-0 z-10 safe-top">
         <button
           onClick={() => router.push('/dashboard')}
@@ -687,7 +678,6 @@ export default function GamePage() {
 
       <div className="max-w-6xl mx-auto px-2 sm:px-4 py-2 sm:py-4">
         <div className="grid grid-cols-4 gap-2 sm:gap-4">
-          {/* Players List - Sidebar */}
           <div className="col-span-1 bg-white rounded-2xl p-3 sm:p-4 border border-gray-200 shadow-sm overflow-y-auto max-h-[calc(100vh-200px)]">
             <p className="text-gray-500 text-xs font-medium mb-3 text-center">
               {otherPlayerIds.length === 1 ? 'Opponent' : `Players (${otherPlayerIds.length + 1})`}
@@ -731,7 +721,6 @@ export default function GamePage() {
             </div>
           </div>
 
-          {/* Game Board */}
           <div className="col-span-2 flex flex-col items-center justify-center">
             <GameBoard
               topCard={topCard}
@@ -743,7 +732,6 @@ export default function GamePage() {
             />
           </div>
 
-          {/* Player Info */}
           <div className="col-span-1 bg-white rounded-2xl p-3 sm:p-4 border border-gray-200 shadow-sm">
             <div className="text-center">
               <div className="flex justify-center mb-2">
@@ -774,14 +762,12 @@ export default function GamePage() {
         </div>
       </div>
 
-      {/* Error Toast */}
       {error && (
         <div className="fixed bottom-24 left-4 right-4 max-w-md mx-auto bg-red-500 text-white p-3 rounded-xl text-sm z-50 shadow-lg">
           {error}
         </div>
       )}
 
-      {/* Player Hand - Bottom */}
       <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-3 pb-3 sm:pb-4 safe-bottom border-t border-gray-200">
         <PlayerHand
           cards={playerHand}
